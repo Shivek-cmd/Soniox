@@ -16,7 +16,7 @@ services:
     environment:
       - SONIOX_VOICE_BOT_WS_URL=ws://voice-server:8765
       - VOICE_BOT_LANGUAGE=pa
-      - VOICE_BOT_VOICE=female_1
+      - VOICE_BOT_VOICE=Maya
     depends_on:
       - voice-server
     restart: unless-stopped
