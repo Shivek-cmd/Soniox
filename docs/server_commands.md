@@ -96,12 +96,45 @@ docker compose logs -f caddy
 
 ## Updating Code
 
-When you push changes from Windows to GitHub:
+### If changes are only in tools.py / main.py (inside soniox_examples submodule)
 
+**Step 1 — commit inside the submodule (on Windows):**
+```powershell
+cd "D:\Chrishan Solution\Soniox\soniox_examples"
+git add apps/soniox-voice-bot-demo/server/tools.py
+git add apps/soniox-voice-bot-demo/server/main.py
+git add apps/soniox-voice-bot-demo/twilio/main.py
+git commit -m "your message here"
+git push
+```
+
+**Step 2 — update parent repo (on Windows):**
+```powershell
+cd "D:\Chrishan Solution\Soniox"
+git add soniox_examples
+git commit -m "update soniox examples submodule"
+git push
+```
+
+**Step 3 — deploy on server:**
 ```bash
-cd ~/Soniox
-git pull
-docker compose up -d --build
+cd ~/Soniox && git pull && git submodule update && docker compose up -d --force-recreate voice-server
+```
+
+### If changes are in docker-compose.yml or Caddyfile (root repo files)
+
+**On Windows:**
+```powershell
+cd "D:\Chrishan Solution\Soniox"
+git add docker-compose.yml   # or Caddyfile
+git commit -m "your message"
+git push
+```
+
+**On server:**
+```bash
+cd ~/Soniox && git pull && docker compose up -d --force-recreate twilio-bridge
+# or --force-recreate voice-server depending on what changed
 ```
 
 ---
