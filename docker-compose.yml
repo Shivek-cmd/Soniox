@@ -1,0 +1,37 @@
+services:
+  voice-server:
+    build:
+      context: ./soniox_examples/apps/soniox-voice-bot-demo/server
+    environment:
+      - SONIOX_API_KEY=${SONIOX_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=gpt-4o-mini
+      - WEBSOCKET_HOST=0.0.0.0
+      - WEBSOCKET_PORT=8765
+    restart: unless-stopped
+
+  twilio-bridge:
+    build:
+      context: ./soniox_examples/apps/soniox-voice-bot-demo/twilio
+    environment:
+      - SONIOX_VOICE_BOT_WS_URL=ws://voice-server:8765
+      - VOICE_BOT_LANGUAGE=pa
+      - VOICE_BOT_VOICE=female_1
+    depends_on:
+      - voice-server
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+    depends_on:
+      - twilio-bridge
+    restart: unless-stopped
+
+volumes:
+  caddy_data:

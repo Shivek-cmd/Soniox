@@ -1,0 +1,3 @@
+voice.bizbull.ai {
+    reverse_proxy twilio-bridge:5050
+}
