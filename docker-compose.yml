@@ -23,6 +23,9 @@ services:
 
   caddy:
     image: caddy:2-alpine
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     ports:
       - "80:80"
       - "443:443"
