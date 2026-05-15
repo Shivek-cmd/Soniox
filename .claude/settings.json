@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:soniox.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(mkdir \"d:\\\\Chrishan Solution\\\\Soniox\\\\docs\")",
+      "Bash(mkdir \"d:\\\\Chrishan Solution\\\\Soniox\\\\src\")",
+      "Bash(mkdir \"d:\\\\Chrishan Solution\\\\Soniox\\\\src\\\\agent\")",
+      "Bash(mkdir \"d:\\\\Chrishan Solution\\\\Soniox\\\\src\\\\prompts\")",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(curl -s \"https://api.github.com/repos/soniox/soniox-js/git/trees/main?recursive=1\")",
+      "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); [print\\(item['path']\\) for item in data.get\\('tree',[]\\) if 'example' in item['path'].lower\\(\\) or item['path'].endswith\\('.js'\\) or item['path'].endswith\\('.ts'\\)]\")",
+      "WebFetch(domain:api.github.com)",
+      "Read(//d/Chrishan Solution/**)",
+      "Bash(uv --version)",
+      "Bash(npm --version)",
+      "PowerShell(python --version)",
+      "PowerShell(node --version)",
+      "PowerShell(npm --version)",
+      "PowerShell(pip --version)",
+      "Skill(update-config)",
+      "Skill(update-config:*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\shive\\.claude"
+    ]
+  }
+}

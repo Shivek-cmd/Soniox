@@ -1,0 +1,911 @@
+## Soniox docs summary:
+
+# Soniox docs - Distilled Summary
+
+## Table of Contents
+- [AI engineering](#ai-engineering)
+- [Community and support](#community-and-support)
+- [Data residency](#data-residency)
+- [FAQ](#faq)
+- [Introduction](#introduction)
+- [Security and privacy](#security-and-privacy)
+- [Errors](#errors)
+- [Soniox API reference](#soniox-api-reference)
+- [Soniox Live](#soniox-live)
+- [Soniox Voice Agent](#soniox-voice-agent)
+- [Direct stream](#direct-stream)
+- [Proxy stream](#proxy-stream)
+- [Temporary API keys](#temporary-api-keys)
+- [Usage logs](#usage-logs)
+- [Community integrations](#community-integrations)
+- [Integrations](#integrations)
+- [Various integrations: n8n, TanStack AI SDK, Twilio, Vercel AI SDK, React Native SDK, Pipecat, LiveKit, LangChain, etc.](#integrations-details)
+- [Speech-to-Text and Text-to-Speech Models](#models)
+- [SDKs and guides](#sdks-and-guides)
+
+---
+
+# AI engineering
+Soniox offers AI tools integrated into your coding environment:
+
+- **MCP server:** Access Soniox docs within Cursor, Windsurf, Claude Code, etc.
+- **AI assistant:** Ask API questions, get code explanations, guidance directly.
+- **LLM context files:** `llms.txt` and `llms-full.txt` provide API and example context to AI models for better assistance.
+- **Copy/Open buttons:** Copy page Markdown or open content in ChatGPT/Claude for live interactive help.
+
+Setup MCP server with:
+
+```json
+"soniox-docs": {
+  "command": "npx",
+  "args": ["-y","mcp-remote","https://soniox.com/docs/api/mcp/mcp"]
+}
+```
+
+More info & pricing at [soniox.com](https://soniox.com).
+
+---
+
+# Community and support
+Support levels:
+
+- **Free:** Developer community on [Discord](https://discord.gg/rWfnk9uM5j).
+- **Business/Enterprise:** Dedicated support with SLAs; contact sales@soniox.com.
+
+Track issues and find official code on [Soniox GitHub](https://github.com/soniox).
+
+See [Soniox website](https://soniox.com/) for products & pricing.
+
+---
+
+# Data residency
+- Your audio and transcript content **never used for training**.
+- Enables choosing processing & storage **region per project** (US, EU, Japan).
+- Using a regional project API key and regional domain ensures data stays local.
+- System metadata (account, billing) may be processed outside the selected region.
+- Contact sales@soniox.com to enable or request custom regions.
+
+Regional endpoints:
+
+| Region         | API domain                                                                       |
+|----------------|----------------------------------------------------------------------------------|
+| United States  | `api.soniox.com`, `stt-rt.soniox.com`, `tts-rt.soniox.com`                      |
+| European Union | `api.eu.soniox.com`, `stt-rt.eu.soniox.com`, `tts-rt.eu.soniox.com`             |
+| Japan          | `api.jp.soniox.com`, `stt-rt.jp.soniox.com`, `tts-rt.jp.soniox.com`             |
+
+---
+
+# FAQ
+
+**High WebSocket connection times (>1s) caused by:**
+
+- Network latency or cross-region connections → Use regional endpoints.
+- Large initial context payload → Send smaller context or buffer audio locally before connecting.
+
+**For higher concurrent API rates:**
+
+Request limit increase in Soniox Console; reviewed in 1-3 business days.
+
+**Legal docs (MSA, DPA) available for Business/Enterprise customers:** contact sales@soniox.com.
+
+---
+
+# Introduction
+Soniox provides APIs for:
+
+- Speech-to-text and translation (60+ languages)
+- Text-to-speech with natural voices (60+ languages)
+
+Features:
+
+- Real-time and batch APIs
+- SDKs and WebSocket streaming support
+- Self-service [Soniox Console](https://console.soniox.com) to manage keys, usage, logs, billing
+
+Products:
+
+- [Speech-to-Text](/stt/get-started)
+- [Text-to-Speech](/tts/get-started)
+
+---
+
+# Security and privacy
+- Compliance: SOC 2 Type 2, ISO/IEC 27001:2022, GDPR, HIPAA.
+- Content (audio, transcripts) **never used to train models**.
+- Data retention only if explicitly requested (e.g., async API).
+- Logs minimal, no raw audio/transcripts, used for debugging and billing.
+- All communication encrypted with TLS 1.2+.
+- Stored data restricted by account.
+
+---
+
+# Errors
+- REST API errors have structured JSON with stable `error_type`.
+- Async transcription jobs may fail asynchronously; check transcription `status` and `error_type`.
+- Common error types:
+
+| error_type                     | HTTP | Cause & handling summary                                                                   |
+|-------------------------------|------|---------------------------------------------------------------------------------------------|
+| `internal_error`               | 500  | Server error; retry once, then contact support with `request_id`.                           |
+| `unauthenticated`             | 401  | Invalid or missing API key; provide valid Bearer token.                                   |
+| `invalid_request`             | 400  | Validation errors; correct request data as per `validation_errors`.                        |
+| `invalid_cursor`              | 400  | Malformed pagination cursor; start from first page or use last `next_page_cursor`.         |
+| `limit_exceeded`              | 429  | Rate limits or quotas exceeded; slow down or request increased limits in Console.          |
+| `organization_balance_exhausted` | 402  | No funds; top up account or enable autopay; failed async jobs must be resubmitted.         |
+| `project_monthly_budget_exhausted` | 402  | Monthly budget reached; increase limit or wait for reset.                                 |
+| `invalid_audio_file`          | 400  | Corrupt or unsupported audio; re-encode or shorten file.                                  |
+| `file_download_blocked`       | N/A  | Async only. URL resolved to blocked IP; use reachable public URLs.                        |
+| `file_download_failed`        | N/A  | Async only. Cannot fetch URL due to network error.                                        |
+| `transcription_output_too_long` | N/A | Async only. Output too long for the model; contact support.                                |
+| `model_not_available`         | 400  | Unknown or retired model; use current supported models.                                 |
+| `file_not_found`              | 404  | File ID not found in project scope.                                                     |
+| `transcription_not_found`     | 404  | Transcription ID not found in project scope.                                           |
+| `transcription_invalid_state` | 409  | Transcript unavailable (e.g., processing, failed, deleted); check status before fetching. |
+
+Realtime WebSocket and TTS REST API have their own error formats, see their respective docs.
+
+---
+
+# Soniox API reference
+
+**Base URLs** vary by service and region; see [data residency](#data-residency).
+
+## REST APIs
+
+- Auth: Create temporary API keys (`POST /v1/auth/temporary-api-key`)
+- STT: Files and transcriptions management, models listing
+- TTS: Generate speech (`POST /tts`), models listing (`GET /v1/tts-models`)
+
+## WebSocket APIs
+
+- Speech-to-Text: `wss://stt-rt.soniox.com` 
+- Text-to-Speech: `wss://tts-rt.soniox.com/tts-websocket`
+
+Errors in REST have stable `error_type`; WebSocket errors return `error_code` and `error_message`.
+
+---
+
+# Soniox Live
+Demo app streaming microphone audio directly to Soniox real-time API with live transcription & translation.
+
+- Features: real-time low-latency speech recognition and translation in 60+ languages.
+- Client: React (web), React Native (mobile).
+- Server: Python to issue temporary API keys.
+- Source code: [GitHub](https://github.com/soniox/soniox_examples/tree/master/apps/soniox-live-demo)
+
+---
+
+# Soniox Voice Agent
+Demo app showing conversational AI assistant with streaming STT, LLM, and TTS.
+
+- Example persona: Appointment booking for "Soniox AutoWorks".
+- Client: React frontend, Twilio phone integration proxy.
+- Server: Python modular processors (VAD, STT, LLM, TTS).
+- Features: real-time, multilingual, customizable AI, multiple interaction methods.
+- Source code: [GitHub](https://github.com/soniox/soniox_examples/tree/master/apps/soniox-voice-bot-demo)
+
+---
+
+# Direct stream
+Low-latency client → Soniox STT WebSocket connection **without a proxy server**.
+
+- Use temporary API keys limited for WebSocket STT usage (`usage_type: "transcribe_websocket"`).
+- Example server endpoints provided in Python (FastAPI) and Node.js (Express) to issue temporary API keys.
+- HTML client streams mic audio, connects to WebSocket API via temporary key, displays live transcription.
+- Buffer audio locally while establishing connection to avoid gaps.
+- Temporary API key request JSON example:
+
+```json
+{
+  "usage_type": "transcribe_websocket",
+  "expires_in_seconds": 60
+}
+```
+
+---
+
+# Proxy stream
+Client streams audio to proxy WebSocket, proxy connects to Soniox STT WebSocket API.
+
+- Proxy authenticates with main API key.
+- Proxy forwards client audio and Soniox responses.
+- Useful if you want to inspect, transform, or store audio/transcripts on server.
+- Example proxy servers: Python (asyncio+websockets), Node.js (ws).
+- Client example streams audio from mic via MediaRecorder to proxy WebSocket and shows live transcripts.
+- Scheme:
+
+Browser <-> Proxy Server <-> Soniox WebSocket
+
+---
+
+# Temporary API keys
+
+Short-lived API keys for untrusted clients to directly connect to Soniox.
+
+- Created server-side using long-lived API key; pass restrictions at creation.
+- Fields:
+  - `usage_type`: `"transcribe_websocket"` or `"tts_rt"`.
+  - `expires_in_seconds`: max 3600 seconds.
+  - `single_use`: restrict to 1 stream.
+  - `max_session_duration_seconds`: duration limit per stream (up to 18000s).
+  - `client_reference_id`: optional tracking ID (max 256 chars).
+
+- Use temporary keys client-side to avoid exposing long-lived keys.
+- Server creates temporary key via:
+
+`POST /v1/auth/temporary-api-key`
+
+Request body example:
+
+```json
+{
+  "usage_type": "transcribe_websocket",
+  "expires_in_seconds": 60,
+  "single_use": true
+}
+```
+
+- Behavior:
+  - Expiration controls how long the key can open streams; open streams persist after expiry.
+  - When session duration exceeded, connection closes with 403 error.
+  - Speech-to-Text WebSocket returns JSON close message; TTS supports multi-stream and stream-level errors.
+  - For REST TTS, error before audio → HTTP 403, after audio → HTTP Trailers.
+
+---
+
+# Usage logs
+
+Per-request records of transcription or speech generation.
+
+- Includes model, audio duration, token counts, cost, timestamps.
+- Optional `client_reference_id` identifiers for end-user or session tracking.
+- Can bind `client_reference_id` at temporary key creation (cannot be overridden by clients).
+- Access logs via:
+
+`GET /v1/usage-logs?start_time=<ISO>&end_time=<ISO>`
+
+- Only completed successful requests logged.
+- Supported APIs: STT WebSocket, STT Async, TTS WebSocket, TTS REST.
+
+---
+
+# Community integrations
+
+- Agent Voice Response (AVR) for Asterisk PBX (https://github.com/agentvoiceresponse)
+- Unofficial Go SDK (https://github.com/moxierobots/soniox-stt-go)
+
+Note: These integrations are community-built, not officially supported.
+
+---
+
+# Integrations overview
+
+Soniox integrates with platforms for real-time, multilingual voice apps:
+
+- LiveKit
+- Pipecat
+- Vercel AI SDK
+- TanStack AI SDK
+- LangChain (Python and JS)
+- Twilio
+- n8n
+
+Each integration offers components hooking Soniox STT/TTS into workflows in those platforms.
+
+---
+
+# n8n Integration
+
+Soniox Node-based n8n node for speech-to-text in workflows.
+
+- Supports audio sources: Binary files, Audio URLs, File IDs.
+- Operations: Create transcription (sync or async via webhook), get results, delete resources.
+- Language hints, speaker diarization, language identification, custom context, and translation options available.
+- Supports webhook authentication headers and metadata.
+- Auto-delete of transcription & uploaded files configurable.
+- Basic to advanced usage covered with examples.
+- Install via npm: `npm install @soniox/n8n-nodes-soniox`.
+
+---
+
+# TanStack AI SDK Integration
+
+- Provides a Soniox transcription adapter for unified AI transcription interface.
+- Install with `npm install @soniox/tanstack-ai-adapter`.
+- Example: `generateTranscription({ adapter: sonioxTranscription('stt-async-v4'), audio: URL, modelOptions: {...} });`
+- Options include language hints, context, diarization, translation.
+- Access raw tokens with metadata via `providerMetadata`.
+- Supports one-way and two-way translation.
+
+---
+
+# Twilio Integration
+
+- Stream Twilio live call audio to Soniox real-time STT API.
+- Receive real-time transcription via WebSockets.
+- Complete example: https://github.com/soniox/soniox-twilio-realtime-transcription
+- Steps: Create Twilio account, obtain Soniox API key, configure server and expose via ngrok, update TwiML to stream audio.
+- Client connects to server WebSocket to display live transcription.
+- Use provided Python call script to place test calls.
+
+---
+
+# Vercel AI SDK Integration
+
+- Soniox transcription provider for Vercel AI SDK.
+- Install `npm install @soniox/vercel-ai-sdk-provider`.
+- Create provider with `createSoniox({ apiKey, apiBaseUrl })`.
+- Use with `experimental_transcribe` function.
+- Supports language hints, context, diarization, translation.
+- See [Speech-to-Text API reference](/api-reference/stt/transcriptions/create_transcription).
+
+---
+
+# React Native SDK
+
+- Use `@soniox/react` and `@soniox/client` to capture mic audio and stream real-time STT in React Native.
+- Create custom `AudioSource` wrappers for audio capture libraries.
+- Use hooks like `useRecording()` to manage sessions, get transcription text.
+- Use temporary API keys to avoid exposing long-lived keys in client.
+- Example with startup, start/stop controls, and rendering transcripts.
+- Next steps: explore real-time transcription, speech generation, full SDK reference.
+
+---
+
+# Get started - Speech-to-Text
+
+- Create Soniox account and get API key.
+- Clone official examples from https://github.com/soniox/soniox_examples.
+- Run real-time or async transcription examples in Python or Node.js.
+- Features: languages hints, speaker diarization, real-time one-way and two-way translation.
+- Async supports transcribing from URLs or uploaded files.
+- Next steps: explore real-time API, async API, error handling.
+
+---
+
+# Get started - Text-to-Speech
+
+- Create account and obtain API key.
+- Clone and run real-time (WebSocket) and REST TTS examples (Python, Node.js).
+- Generate speech in 60+ languages, multiple voices.
+- Use real-time streaming TTS for low-latency voice agents; REST TTS for batch or server-side.
+- Next steps: real-time API and REST API docs.
+
+---
+
+# Models
+
+**Speech-to-Text Models**
+
+- Current: `stt-rt-v4` (real-time), `stt-async-v4` (async)
+- Aliases available for v3 versions
+- Key improvements: higher accuracy, better multilingual handling, endpoint detection, longer audio processing.
+- Deprecations: older preview models to be retired by Feb 2026.
+
+**Text-to-Speech Models**
+
+- Current: `tts-rt-v1`
+- Aliases: preview points to v1
+- Capabilities: native quality, hallucination-free, supports 60+ languages and multiple voices.
+
+---
+
+# API Endpoints Summaries
+
+### Create temporary API key
+`POST /v1/auth/temporary-api-key`
+
+Request body (JSON):
+
+- `usage_type` (string, required) - `transcribe_websocket` or `tts_rt`.
+- `expires_in_seconds` (int, required) - 1 to 3600 seconds.
+- `client_reference_id` (optional string, max 256).
+- `single_use` (optional bool).
+- `max_session_duration_seconds` (optional int, 1–18000).
+
+Response: 201 Created with JSON `{ api_key, expires_at }`.
+
+Errors: 400 invalid params, 401 unauthorized, 429 limits, 500 internal.
+
+---
+
+### Get usage logs
+`GET /v1/usage-logs`
+
+Query parameters:
+
+- `start_time` (ISO8601, required)
+- `end_time` (ISO8601, required)
+- `limit` (optional)
+- `sort` (optional)
+- `cursor` (optional for pagination)
+
+Response: 200 with array of usage logs including model, client_reference_id, tokens, cost, timestamps.
+
+---
+
+### Get models
+`GET /v1/models`
+
+Returns available STT models and attributes including languages, translation capabilities.
+
+---
+
+### STT WebSocket API
+`wss://stt-rt.soniox.com/transcribe-websocket`
+
+Client sends JSON config:
+
+- `api_key`: your API key (long-lived or temporary).
+- `model`: e.g., `stt-rt-v4`.
+- `audio_format`: `auto` for container autodetect or raw formats.
+- `num_channels`, `sample_rate`: required for raw formats.
+- Optional language hints, context, speaker diarization, language identification.
+- Optional translation config (`one_way` or `two_way`).
+
+Stream audio as binary frames. Close stream with empty frame to end.
+
+Server responses are JSON with tokens:
+
+- `tokens`: array of token objects `{ text, start_ms?, end_ms?, confidence, is_final, speaker?, translation_status?, language?, ... }`
+- `final_audio_proc_ms`, `total_audio_proc_ms`
+- Final message: with `"finished": true`.
+
+Error responses close connection with JSON error `{ error_code, error_message }`.
+
+---
+
+### Generate speech (REST API)
+`POST https://tts-rt.soniox.com/tts`
+
+Request JSON:
+
+```json
+{
+  "model": "tts-rt-v1",
+  "language": "en",
+  "voice": "Adrian",
+  "audio_format": "wav",
+  "text": "Hello from Soniox Text-to-Speech.",
+  "sample_rate": 24000,
+  "bitrate": 128000,
+  "client_reference_id": "some_internal_id"
+}
+```
+
+Response: raw audio bytes with appropriate content-type. Mid-stream errors transmitted via HTTP trailers.
+
+Errors: 400 Bad request, 401 unauthorized, 402 payment required, 408 timeout, 429 rate limited, 500 server error, 503 service unavailable.
+
+---
+
+### TTS WebSocket API
+`wss://tts-rt.soniox.com/tts-websocket`
+
+Client sends config JSON per stream:
+
+- `api_key`: API key
+- `stream_id`: client unique stream ID
+- `model`
+- `language`
+- `voice`
+- `audio_format`
+- Optional `sample_rate`, `bitrate`, `client_reference_id`
+
+Then send incremental text chunks JSON:
+
+```json
+{ "text": "Hello there,", "text_end": false, "stream_id": "stream-001" }
+```
+
+Close stream with chunk having `"text_end": true`.
+
+Server sends base64 audio chunks per stream ID:
+
+```json
+{ "audio": "...base64...", "audio_end": false, "stream_id": "stream-001" }
+```
+
+Followed by:
+
+- `"audio_end": true` : last audio chunk
+- `"terminated": true`: stream completed
+
+Errors are stream-scoped and do not close connection except on connection-level failures.
+
+---
+
+### REST STT API endpoints (summary)
+
+- **Files management:**
+  - `POST /v1/files`: Upload file (multipart/form-data; file required)
+  - `GET /v1/files`: List files with paging
+  - `GET /v1/files/count`: Get total file count per source
+  - `GET /v1/files/{file_id}`: Get metadata for a file
+  - `DELETE /v1/files/{file_id}`: Delete a file permanently
+
+- **Transcriptions:**
+  - `POST /v1/transcriptions`: Create a transcription job (from `audio_url` or `file_id` or upload file through SDK)
+  - `GET /v1/transcriptions`: List transcriptions with paging
+  - `GET /v1/transcriptions/count`: Get transcription counts
+  - `GET /v1/transcriptions/{transcription_id}`: Get transcription details
+  - `GET /v1/transcriptions/{transcription_id}/transcript`: Get full transcript with token metadata (only when status=completed)
+  - `DELETE /v1/transcriptions/{transcription_id}`: Delete transcription (cannot delete while processing)
+
+- Error responses via standard JSON error body with `error_type` and details.
+
+---
+
+# SDKs
+
+## Node SDK
+- Fully typed API client supporting REST and WebSocket STT and TTS.
+- Supports env vars for configuring api keys, regions, URLs.
+- Examples:
+
+```ts
+import { SonioxNodeClient } from "@soniox/node";
+
+const client = new SonioxNodeClient();
+
+await client.files.upload(buffer);
+const transcription = await client.stt.transcribe({ model: "stt-async-v4", audio_url: "https://..." });
+console.log(transcription.transcript?.text);
+```
+
+- Real-time usage:
+
+```ts
+const session = client.realtime.stt({ model: "stt-rt-v4" });
+await session.connect();
+session.on("result", (res) => console.log(res.tokens.map(t => t.text).join("")));
+await session.sendStream(myAudioStream, {finish:true});
+```
+- TTS streaming with multiStream support, REST TTS calls.
+
+## Python SDK
+- Intuitive client for REST and WebSocket STT and TTS.
+- Supports sync (`SonioxClient`) and async (`AsyncSonioxClient`) usage.
+- Examples:
+
+```python
+client = SonioxClient()
+transcription = client.stt.transcribe(audio_url="https://...", wait=True)
+print(transcription.transcript.text)
+```
+
+Real-time TTS:
+
+```python
+config = RealtimeTTSConfig(...)
+with client.realtime.tts.connect(config=config) as session:
+    session.send_text_chunks(["Hello world"], text_end=True)
+    audio = b"".join(session.receive_audio_chunks())
+```
+
+- Supports uploading files, polling transcriptions, deleting resources, and webhook handling.
+
+## Web SDK (JavaScript/browser)
+- Client for browser environment using WebSocket for real-time STT and TTS.
+- Use temporary API keys via backend.
+- High-level recording API via `client.realtime.record()`.
+- Example:
+
+```ts
+const client = new SonioxClient({
+  config: async () => {
+    const res = await fetch("/tmp-key", { method: "POST" });
+    return await res.json();
+  },
+});
+const recording = client.realtime.record({ model: "stt-rt-v4" });
+recording.on("result", res => console.log(res.tokens));
+```
+
+- TTS with `client.realtime.tts()`, `sendText`, and async iteration for audio playback.
+
+## React SDK
+- React hooks built on Web SDK.
+- Use `SonioxProvider` for context or pass config.
+- `useRecording` for real-time STT with reactive text state and controls.
+- `useTts` hook for real-time TTS with streaming, text chunking, playback, and error handling.
+- Supports permissions and audio level metering.
+
+---
+
+# Core Concepts
+
+## Confidence scores
+Every recognized token includes a confidence score 0.0-1.0 indicating recognition likelihood.
+
+---
+
+## Context
+Provide structured context to improve transcription and translation:
+
+- `general`: key-value pairs for domain, participants, topic etc.
+- `text`: long-form background text (notes, docs).
+- `terms`: domain-specific or uncommon words.
+- `translation_terms`: custom source-to-target translations.
+
+Max context ~8,000 tokens.
+
+---
+
+## Language hints
+Bias model toward expected languages via ISO codes (e.g., `["en","es"]`). Does not restrict recognition, just biases.
+
+---
+
+## Language identification
+Each token includes detected language code when enabled. Works in streaming and async modes. Enables detecting mid-sentence language changes.
+
+---
+
+## Language restrictions
+Strict mode biases output to only specified languages with `language_hints_strict: true`. Recommended to use a single language only for best results.
+
+---
+
+## Speaker diarization
+Model labels tokens with speaker IDs when enabled for multi-speaker audio. Async mode is more accurate than real-time.
+
+---
+
+## Timestamps
+Tokens have precise start and end millisecond offsets for aligning text with audio.
+
+---
+
+## Audio formats (TTS)
+Supported output audio formats:
+
+- Raw PCM: `pcm_s16le`, `pcm_f32le`, `pcm_mulaw`, `pcm_alaw`, `wav`
+- Lossless compressed: `flac`
+- Lossy compressed: `mp3`, `opus`, `aac`
+
+Sample rates and bitrates vary by format; see detailed tables.
+
+---
+
+## Language mixing (TTS)
+Single language per TTS request/session. To mix languages, split text and generate audio per language, then concatenate.
+
+---
+
+## Voices (TTS)
+12 studio-quality voices available, usable across all 60+ supported languages with consistent identity.
+
+---
+
+# Guides & Patterns
+
+### Async transcription
+Upload file or submit public URL/file ID to `POST /v1/transcriptions`.
+
+Optionally wait synchronously or use webhook for completion notifications.
+
+Poll transcription status or get full transcript including tokens.
+
+Clean up uploaded files and transcriptions manually or with `cleanup` options.
+
+---
+
+### Webhooks
+Configure webhook URL and optional auth headers in transcription requests.
+
+Receive POST callback on completion/errors with status and transcription ID.
+
+Secure webhook with custom auth headers.
+
+---
+
+### Real-time transcription
+Connect via WebSocket, send config, then audio frames.
+
+Receive streaming JSON responses with partial and final tokens.
+
+Use endpoint detection or manual finalization to detect speech turn ends.
+
+Support for speaker diarization, language hints, translation.
+
+---
+
+### Real-time TTS
+Connect via WebSocket, send config per stream, and incremental text.
+
+Receive base64 audio chunks interleaved with text input.
+
+Handle stream termination and cancellation with three-step handshake.
+
+Supports multiple concurrent streams on one WebSocket connection.
+
+---
+
+### Temporary API keys lifecycle, keepalive, and error handling
+Use server-issued short-lived, limited scope API keys for client connections.
+
+Send keepalive messages every ~20 seconds (STT) or as required (TTS).
+
+Handle API errors gracefully, with retries or fallback.
+
+---
+
+# Additional concepts
+
+- **Direct stream:** Client connects directly to Soniox WebSocket with temp keys for lowest latency.
+- **Proxy stream:** Client streams audio via backend proxy to Soniox WebSocket (adds inspect/transform layer).
+- **SDK event model:** All realtime transcriptions and speech generations emit events (result, error, endpoint, finished).
+- **Utterance buffers:** Aggregate tokens into logical utterances based on endpoint events.
+- **Multi-stream TTS:** Single WebSocket connection can carry 5 concurrent TTS streams multiplexed by stream_id.
+
+---
+
+# Code Examples
+
+**Python Async Transcribe from URL:**
+
+```python
+from soniox import SonioxClient
+
+client = SonioxClient()
+transcription = client.stt.transcribe(
+    model="stt-async-v4",
+    audio_url="https://soniox.com/media/examples/coffee_shop.mp3",
+    wait=True,
+)
+transcript = client.stt.get_transcript(transcription.id)
+print(transcript.text)
+```
+
+**Node real-time STT:**
+
+```ts
+const { SonioxNodeClient } = require("@soniox/node");
+const client = new SonioxNodeClient();
+const session = client.realtime.stt({ model: "stt-rt-v4" });
+session.on("result", res => console.log(res.tokens.map(t => t.text).join("")));
+await session.connect();
+await session.sendStream(audioStream, { finish: true });
+```
+
+**Web Client direct stream HTML:**
+
+```html
+<button id="trigger">Start</button>
+<script type="module">
+  import { RecordTranscribe } from "https://unpkg.com/@soniox/speech-to-text-web?module";
+
+  // On button click: fetch temporary key, create RecordTranscribe, start streaming mic audio
+</script>
+```
+
+**TTS REST generation with Node SDK:**
+
+```ts
+const client = new SonioxNodeClient();
+const bytes = await client.tts.generateToFile("hello.wav", {
+  text: "Hello from Soniox text-to-speech.",
+  voice: "Adrian",
+  model: "tts-rt-v1",
+  language: "en",
+  audio_format: "wav",
+});
+console.log(`Wrote ${bytes} bytes`);
+```
+
+**WebSocket TTS stream in Python (sync):**
+
+```python
+from soniox import SonioxClient, RealtimeTTSConfig
+client = SonioxClient()
+config = RealtimeTTSConfig(stream_id="...", model="tts-rt-v1", language="en", voice="Adrian", audio_format="wav")
+
+with client.realtime.tts.connect(config=config) as session:
+    session.send_text_chunk("Hello", text_end=True)
+    audio = b"".join(session.receive_audio_chunks())
+with open("output.wav", "wb") as f:
+    f.write(audio)
+```
+
+---
+
+# Summary
+
+Soniox documentation covers:
+
+- Powerful, production-ready STT and TTS APIs supporting real-time and asynchronous workflows.
+- Comprehensive error handling and API reference.
+- Support for 60+ languages with advanced features: language hinting/restriction, speaker diarization, context customization, real-time translation.
+- Temporary API keys for secure client usage.
+- Integration with major AI platforms and SDKs.
+- Demo apps and guides for direct and proxy streaming.
+- Official Node.js, Python, Web, and React SDKs with detailed usage and event-driven APIs.
+
+Use the official SDKs and APIs to build fast, high-quality voice integrations with minimal effort and full control.
+
+For detailed API schemas, code examples, and error definitions, refer to individual sections above and the [Soniox API reference](#soniox-api-reference).
+
+---
+
+For questions or help integrating Soniox, use the AI assistant built into the docs or contact support@soniox.com.
+
+## Soniox website summary:
+
+Soniox Website Summary
+
+---
+
+**Voice Platform**  
+Soniox provides a unified real-time multilingual voice AI platform with speech-to-text (STT), text-to-speech (TTS), and translation in 60+ languages. Native-speaker accuracy supports mixed-language conversations, low-latency streaming (<200ms), speaker diarization, accurate alphanumeric recognition, and enterprise-grade compliance (SOC 2, ISO 27001, HIPAA, GDPR). One global API supports regional deployments (US, EU, Japan; more regions coming). Ideal for voice agents, meetings, call centers, and large-scale workflows.  
+- API integration example available  
+- Explore API & docs: https://soniox.com/docs  
+- Compare with other providers live: https://soniox.com/compare  
+
+---
+
+**Soniox App**  
+All-in-one voice workspace for individuals and teams. Features:  
+- Smart Scribe: live transcription, meeting summaries, speaker separation  
+- Translator: real-time speech translation across 60+ languages, supports language switching mid-sentence  
+- Voice Typing: system-wide dictation in 60+ languages, up to 4× faster than typing  
+Available on iOS, Android, macOS, Windows.  
+- iOS App: https://apps.apple.com/us/app/soniox/id1560199731  
+- Android App: https://play.google.com/store/apps/details?id=com.soniox.sonioxmobileapp  
+- Desktop apps for macOS/Windows: https://soniox.com/app  
+Privacy: Audio is processed in real-time, never stored or used for training. Free to start with weekly free credits.  
+- Support & docs: https://soniox.com/docs  
+
+---
+
+**Soniox Text-to-Speech**  
+High-fidelity, hallucination-free TTS in 60+ languages with:  
+- Accurate pronunciation of names, alphanumerics, foreign words  
+- Language switching mid-sentence  
+- Ultra-low-latency streaming that starts output before full sentence is available  
+Built for voice agents, IVR, accessibility, media production, multilingual experiences.  
+Pricing starts at $0.70/hour generated speech.  
+
+---
+
+**Benchmarks & Recognition**  
+- Soniox achieves best-in-class STT accuracy and speed (1.29% WER; ~249ms latency in English) and native accuracy across 60+ languages including mixed language and noisy environments.  
+- Supports real-time multi-speaker diarization and semantic end-point detection.  
+- Data processed in-region complying with privacy and regulatory requirements.  
+
+---
+
+**Developer SDKs**  
+Official SDKs for Python, Node.js, Web, React, React Native simplify integration with event-driven real-time and batch transcription; include utilities for language detection, speaker segmentation, and error handling.  
+
+---
+
+**Use Cases**  
+- Voice Agents: Low-latency, accurate speech recognition and natural speech generation  
+- Contact Centers: Real-time transcription and translation  
+- Medical Transcription: Context-aware, domain-specific speech understanding  
+- Media: Fast and accurate captioning and translation  
+- Wearables: Streaming voice experiences with minimal delay  
+- Multilingual communication & global voice products  
+
+---
+
+**Regional Data & Compliance**  
+Soniox Sovereign Cloud enables deployment in US, EU, Japan, Korea, Australia, Canada, India, and more, with data residency and compliance with GDPR, HIPAA, SOC2, ISO 27001 standards.  
+
+---
+
+**Contact & Support**  
+- General: info@soniox.com  
+- Support: support@soniox.com or Discord: https://discord.gg/rWfnk9uM5j  
+- Offices: Foster City, CA, USA & Ljubljana, Slovenia  
+
+---
+
+**Additional Info**  
+- Soniox is independent and not affiliated with companies named "Sonix"  
+- Pricing: Pay-as-you-use token-based with STT approx. $0.10-$0.12/hr, TTS approx. $0.70/hr  
+- UGC Creator Program for Soniox App content creators available  
+- Full language support list and voice agent demos for 60+ languages available at https://soniox.com  
+
+---
