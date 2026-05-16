@@ -20,20 +20,63 @@ class RestaurantState:
 MENU = {
     "appetizers": [
         {"name": "Samosa (2 pcs)", "price": 7},
+        {"name": "Paneer Pakora", "price": 13},
         {"name": "Veg Pakora", "price": 10},
+        {"name": "Fish Pakora", "price": 16},
+        {"name": "Chicken Pakora", "price": 15},
         {"name": "Aloo Tikki (2 pcs)", "price": 9},
+        {"name": "Papdi Chaat", "price": 11},
+        {"name": "Dahi Bhalla", "price": 11},
+        {"name": "Amritsari Kulcha Chole", "price": 15},
         {"name": "Tandoori Chicken Half", "price": 18},
         {"name": "Chicken Tikka", "price": 17},
+        {"name": "Malai Chicken Tikka", "price": 18},
+        {"name": "Seekh Kebab", "price": 17},
     ],
-    "mains": [
+    "tandoori": [
+        {"name": "Tandoori Chicken Full", "price": 28},
+        {"name": "Tandoori Chicken Half", "price": 18},
+        {"name": "Chicken Tikka", "price": 17},
+        {"name": "Malai Chicken Tikka", "price": 18},
+        {"name": "Tandoori Fish Tikka", "price": 20},
+        {"name": "Paneer Tikka", "price": 17},
+        {"name": "Tandoori Soya Chaap", "price": 16},
+    ],
+    "chicken_mains": [
         {"name": "Butter Chicken", "price": 18},
         {"name": "Chicken Tikka Masala", "price": 18},
         {"name": "Saag Chicken", "price": 18},
+        {"name": "Chicken Curry", "price": 17},
+        {"name": "Kadai Chicken", "price": 18},
+        {"name": "Chicken Vindaloo", "price": 18},
+        {"name": "Chicken Korma", "price": 18},
+        {"name": "Chilli Chicken", "price": 18},
+    ],
+    "lamb_goat_mains": [
         {"name": "Lamb Curry", "price": 20},
+        {"name": "Lamb Vindaloo", "price": 20},
+        {"name": "Lamb Korma", "price": 20},
         {"name": "Goat Curry", "price": 20},
+        {"name": "Goat Masala", "price": 21},
+        {"name": "Saag Goat", "price": 21},
+    ],
+    "seafood_mains": [
+        {"name": "Fish Curry", "price": 19},
+        {"name": "Fish Masala", "price": 20},
+        {"name": "Prawn Curry", "price": 21},
+        {"name": "Prawn Masala", "price": 22},
+    ],
+    "vegetarian_mains": [
         {"name": "Dal Makhani", "price": 16},
+        {"name": "Yellow Dal Tadka", "price": 15},
         {"name": "Palak Paneer", "price": 17},
         {"name": "Kadai Paneer", "price": 17},
+        {"name": "Shahi Paneer", "price": 17},
+        {"name": "Paneer Butter Masala", "price": 17},
+        {"name": "Malai Kofta", "price": 17},
+        {"name": "Baingan Bharta", "price": 16},
+        {"name": "Bhindi Masala", "price": 16},
+        {"name": "Rajma Masala", "price": 15},
         {"name": "Chana Masala", "price": 15},
         {"name": "Aloo Gobi", "price": 15},
         {"name": "Mix Vegetable", "price": 15},
@@ -43,23 +86,52 @@ MENU = {
         {"name": "Garlic Naan", "price": 5},
         {"name": "Roti", "price": 3},
         {"name": "Paratha", "price": 5},
+        {"name": "Lachha Paratha", "price": 6},
+        {"name": "Aloo Paratha", "price": 7},
+        {"name": "Onion Kulcha", "price": 7},
+        {"name": "Amritsari Kulcha", "price": 8},
         {"name": "Peshwari Naan", "price": 5},
     ],
     "rice": [
         {"name": "Basmati Rice", "price": 4},
+        {"name": "Jeera Rice", "price": 6},
+        {"name": "Saffron Rice", "price": 7},
         {"name": "Chicken Biryani", "price": 18},
+        {"name": "Lamb Biryani", "price": 20},
+        {"name": "Goat Biryani", "price": 20},
         {"name": "Veg Biryani", "price": 16},
+    ],
+    "combos": [
+        {"name": "Butter Chicken Combo", "price": 22},
+        {"name": "Vegetarian Thali", "price": 20},
+        {"name": "Non-Vegetarian Thali", "price": 24},
+        {"name": "Chole Bhature", "price": 15},
+        {"name": "Rajma Rice Bowl", "price": 14},
+        {"name": "Dal Makhani Rice Bowl", "price": 15},
+    ],
+    "sides": [
+        {"name": "Raita", "price": 5},
+        {"name": "Plain Yogurt", "price": 4},
+        {"name": "Mango Chutney", "price": 3},
+        {"name": "Mixed Pickle", "price": 3},
+        {"name": "Green Salad", "price": 6},
+        {"name": "Papadum", "price": 3},
     ],
     "drinks": [
         {"name": "Mango Lassi", "price": 6},
         {"name": "Sweet Lassi", "price": 5},
         {"name": "Salted Lassi", "price": 5},
         {"name": "Masala Chai", "price": 4},
+        {"name": "Indian Coffee", "price": 4},
+        {"name": "Pop", "price": 3},
+        {"name": "Bottled Water", "price": 2},
     ],
     "desserts": [
         {"name": "Gulab Jamun (2 pcs)", "price": 6},
         {"name": "Kheer", "price": 6},
         {"name": "Rasmalai (2 pcs)", "price": 7},
+        {"name": "Gajar Halwa", "price": 7},
+        {"name": "Kulfi", "price": 6},
     ],
 }
 
@@ -107,6 +179,16 @@ UPSELLING (like a good waiter — subtle, natural, maximum once or twice per cal
 - NEVER upsell more than twice per call. If they say no, drop it immediately and move on.
 - Make it sound like a genuine suggestion, not a sales pitch. One short sentence, then wait.
 - Never upsell if the customer seems in a hurry or annoyed.
+
+MENU RECOMMENDATION RULES:
+- Never read the full menu unless the customer asks for the full menu. Offer 2-4 relevant choices at a time.
+- If the customer asks for starters or something crispy, mention Fish Pakora, Paneer Pakora, or Samosa.
+- If the customer orders curry without bread or rice, suggest garlic naan, basmati rice, or jeera rice.
+- If the customer orders tandoori or grilled items, suggest raita, green salad, or mango chutney.
+- If the customer wants a full meal, suggest Vegetarian Thali, Non-Vegetarian Thali, or Butter Chicken Combo.
+- If the customer asks for popular Punjabi dishes, mention Butter Chicken, Dal Makhani, Amritsari Kulcha, Chole Bhature, or Fish Pakora.
+- Near the end, if they have no drink, ask once about mango lassi, sweet lassi, or masala chai.
+- For dessert, suggest gulab jamun, rasmalai, gajar halwa, or kulfi only once.
 
 LANGUAGE:
 - Always open the call in English with the language selection question.
@@ -163,7 +245,21 @@ get_menu_tool_description = ChatCompletionFunctionToolParam(
                 "category": {
                     "type": "string",
                     "description": "Menu category to fetch. Use 'all' for the full menu.",
-                    "enum": ["all", "appetizers", "mains", "bread", "rice", "drinks", "desserts"],
+                    "enum": [
+                        "all",
+                        "appetizers",
+                        "tandoori",
+                        "chicken_mains",
+                        "lamb_goat_mains",
+                        "seafood_mains",
+                        "vegetarian_mains",
+                        "bread",
+                        "rice",
+                        "combos",
+                        "sides",
+                        "drinks",
+                        "desserts",
+                    ],
                 },
             },
             "required": ["category"],
