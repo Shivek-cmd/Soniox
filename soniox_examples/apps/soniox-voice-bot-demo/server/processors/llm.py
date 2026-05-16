@@ -1,6 +1,8 @@
 import asyncio
+import re
 import json
 import time
+from difflib import SequenceMatcher
 from typing import Any, Awaitable, Callable, List, Tuple
 
 import openai
@@ -111,6 +113,7 @@ class LLMProcessor(MessageProcessor):
 
         self._active_task: asyncio.Task | None = None
         self._awaiting_language_selection = True
+        self._recent_assistant_texts: list[str] = []
         self._messages: list[ChatCompletionMessageParam] = [
             ChatCompletionSystemMessageParam(
                 role="system",
@@ -136,6 +139,9 @@ class LLMProcessor(MessageProcessor):
             self.log.debug("Transcription endpoint message")
 
             if self._awaiting_language_selection:
+                if not self._has_latest_user_message():
+                    return
+
                 if not self._latest_user_message_selects_language():
                     await self._send_language_prompt()
                     return
@@ -169,6 +175,10 @@ class LLMProcessor(MessageProcessor):
         text = message.final_text()
         if not text:
             # No need to create a new message if there is no final text
+            return
+
+        if self._is_likely_bot_echo(text):
+            self.log.debug("Ignoring likely bot echo transcription", text=text)
             return
 
         if self._messages and self._messages[-1]["role"] == "user":
@@ -209,16 +219,46 @@ class LLMProcessor(MessageProcessor):
         message = LLMChunkMessage(OPENING_GREETING)
         await self._send_message(message)
         self._append_llm_message(message)
+        self._remember_assistant_text(OPENING_GREETING)
         await self._send_message(LLMFullMessage(OPENING_GREETING))
 
     async def _send_language_prompt(self):
         message = LLMChunkMessage(LANGUAGE_PROMPT)
         await self._send_message(message)
         self._append_llm_message(message)
+        self._remember_assistant_text(LANGUAGE_PROMPT)
         await self._send_message(LLMFullMessage(LANGUAGE_PROMPT))
 
+    def _remember_assistant_text(self, text: str):
+        self._recent_assistant_texts.append(text)
+        self._recent_assistant_texts = self._recent_assistant_texts[-6:]
+
+    def _normalize_for_echo_check(self, text: str):
+        return re.sub(r"[^a-z0-9]+", " ", text.casefold()).strip()
+
+    def _is_likely_bot_echo(self, text: str):
+        normalized_text = self._normalize_for_echo_check(text)
+        if not normalized_text:
+            return False
+
+        for assistant_text in self._recent_assistant_texts:
+            normalized_assistant = self._normalize_for_echo_check(assistant_text)
+            if not normalized_assistant:
+                continue
+
+            if normalized_text in normalized_assistant:
+                return True
+
+            similarity = SequenceMatcher(
+                None, normalized_text, normalized_assistant
+            ).ratio()
+            if similarity >= 0.72:
+                return True
+
+        return False
+
     def _latest_user_message_selects_language(self):
-        if not self._messages or self._messages[-1]["role"] != "user":
+        if not self._has_latest_user_message():
             return False
 
         content = self._messages[-1].get("content", "")
@@ -227,6 +267,9 @@ class LLMProcessor(MessageProcessor):
 
         normalized = content.casefold()
         return any(term in normalized for term in LANGUAGE_SELECTION_TERMS)
+
+    def _has_latest_user_message(self):
+        return bool(self._messages and self._messages[-1]["role"] == "user")
 
     async def _generate_llm_response(self):
         # If there was no new user text, cancel the task
@@ -314,6 +357,7 @@ class LLMProcessor(MessageProcessor):
 
             # Send the full aggregated response
             if full_text:
+                self._remember_assistant_text(full_text)
                 await self._send_message(LLMFullMessage(full_text))
                 total_ms = (time.perf_counter() - self._llm_start_time) * 1000
                 await self._send_message(MetricsMessage("llm_total_ms", total_ms))
