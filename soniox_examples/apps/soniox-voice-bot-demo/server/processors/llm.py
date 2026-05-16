@@ -31,6 +31,20 @@ OPENING_GREETING = (
     "Would you like to continue in English, Hindi, or Punjabi?"
 )
 
+LANGUAGE_PROMPT = "Would you like to continue in English, Hindi, or Punjabi?"
+
+LANGUAGE_SELECTION_TERMS = {
+    "english",
+    "hindi",
+    "punjabi",
+    "अंग्रेजी",
+    "इंग्लिश",
+    "हिंदी",
+    "हिन्दी",
+    "ਪੰਜਾਬੀ",
+    "ਪੰਜابی",
+}
+
 
 def _update_tool_calls(
     tool_calls: list,
@@ -96,6 +110,7 @@ class LLMProcessor(MessageProcessor):
                 self._tool_functions[tool[0]["function"]["name"]] = tool[1]
 
         self._active_task: asyncio.Task | None = None
+        self._awaiting_language_selection = True
         self._messages: list[ChatCompletionMessageParam] = [
             ChatCompletionSystemMessageParam(
                 role="system",
@@ -119,6 +134,13 @@ class LLMProcessor(MessageProcessor):
 
         elif isinstance(message, TranscriptionEndpointMessage):
             self.log.debug("Transcription endpoint message")
+
+            if self._awaiting_language_selection:
+                if not self._latest_user_message_selects_language():
+                    await self._send_language_prompt()
+                    return
+                self._awaiting_language_selection = False
+
             # Start LLM generation as a background task
             self._active_task = asyncio.create_task(self._generate_llm_response())
 
@@ -188,6 +210,23 @@ class LLMProcessor(MessageProcessor):
         await self._send_message(message)
         self._append_llm_message(message)
         await self._send_message(LLMFullMessage(OPENING_GREETING))
+
+    async def _send_language_prompt(self):
+        message = LLMChunkMessage(LANGUAGE_PROMPT)
+        await self._send_message(message)
+        self._append_llm_message(message)
+        await self._send_message(LLMFullMessage(LANGUAGE_PROMPT))
+
+    def _latest_user_message_selects_language(self):
+        if not self._messages or self._messages[-1]["role"] != "user":
+            return False
+
+        content = self._messages[-1].get("content", "")
+        if not isinstance(content, str):
+            return False
+
+        normalized = content.casefold()
+        return any(term in normalized for term in LANGUAGE_SELECTION_TERMS)
 
     async def _generate_llm_response(self):
         # If there was no new user text, cancel the task
