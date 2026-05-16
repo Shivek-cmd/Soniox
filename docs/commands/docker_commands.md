@@ -235,6 +235,30 @@ Use when:
 
 ---
 
+## Force Recreate After Pull
+
+```bash
+git pull
+docker compose up -d --build --force-recreate
+```
+
+Use when:
+
+- You pulled new code but the server still seems to run old behavior
+- You changed Python code and want to guarantee fresh containers are started
+- Logs still show old messages after a normal rebuild
+- You want Docker to recreate all project containers, even if it thinks nothing changed
+
+This is stronger than:
+
+```bash
+docker compose up -d --build
+```
+
+It rebuilds images and recreates containers.
+
+---
+
 ## Validate Compose File
 
 ```bash
