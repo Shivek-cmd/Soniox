@@ -88,6 +88,7 @@ class QueryParams(pydantic.BaseModel):
     audio_in_format: str = "pcm_s16le"
     audio_in_sample_rate: int = 16000
     audio_in_num_channels: int = 1
+    audio_out_format: str = "pcm_s16le"
     audio_out_sample_rate: int = 24000
 
     @pydantic.model_validator(mode="before")

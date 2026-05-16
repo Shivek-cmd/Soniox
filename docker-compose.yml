@@ -15,7 +15,7 @@ services:
       context: ./soniox_examples/apps/soniox-voice-bot-demo/twilio
     environment:
       - SONIOX_VOICE_BOT_WS_URL=ws://voice-server:8765
-      - VOICE_BOT_LANGUAGE=pa
+      - VOICE_BOT_LANGUAGE=en
       - VOICE_BOT_VOICE=Maya
     depends_on:
       - voice-server

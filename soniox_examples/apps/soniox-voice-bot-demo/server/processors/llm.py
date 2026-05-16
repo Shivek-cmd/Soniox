@@ -26,6 +26,11 @@ from messages import (
 )
 from processors.message_processor import MessageProcessor
 
+OPENING_GREETING = (
+    "Hi! This is Sierra calling from Bizbull Restaurant. "
+    "Would you like to continue in English, Hindi, or Punjabi?"
+)
+
 
 def _update_tool_calls(
     tool_calls: list,
@@ -110,10 +115,7 @@ class LLMProcessor(MessageProcessor):
             self._append_user_message(message)
         elif isinstance(message, SessionStartMessage):
             self.log.debug("Session start message")
-
-            # Start LLM generation as a background task
-            # If you want user to start the conversation, simply remove this condition
-            self._active_task = asyncio.create_task(self._generate_llm_response())
+            await self._send_opening_greeting()
 
         elif isinstance(message, TranscriptionEndpointMessage):
             self.log.debug("Transcription endpoint message")
@@ -180,6 +182,12 @@ class LLMProcessor(MessageProcessor):
                     content=message.text().lstrip(),
                 )
             )
+
+    async def _send_opening_greeting(self):
+        message = LLMChunkMessage(OPENING_GREETING)
+        await self._send_message(message)
+        self._append_llm_message(message)
+        await self._send_message(LLMFullMessage(OPENING_GREETING))
 
     async def _generate_llm_response(self):
         # If there was no new user text, cancel the task
