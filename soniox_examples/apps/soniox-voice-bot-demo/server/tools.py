@@ -135,6 +135,58 @@ MENU = {
     ],
 }
 
+MENU_CATEGORY_ALIASES = {
+    "main": "all_mains",
+    "mains": "all_mains",
+    "curry": "all_mains",
+    "curries": "all_mains",
+    "chicken": "chicken_mains",
+    "lamb": "lamb_goat_mains",
+    "goat": "lamb_goat_mains",
+    "fish": "seafood_mains",
+    "seafood": "seafood_mains",
+    "prawn": "seafood_mains",
+    "shrimp": "seafood_mains",
+    "veg": "vegetarian_mains",
+    "vegetarian": "vegetarian_mains",
+    "paneer": "vegetarian_mains",
+    "starter": "appetizers",
+    "starters": "appetizers",
+    "crispy": "appetizers",
+    "pakora": "appetizers",
+    "tandoori": "tandoori",
+    "grill": "tandoori",
+    "grilled": "tandoori",
+    "combo": "combos",
+    "combos": "combos",
+    "thali": "combos",
+    "meal": "combos",
+    "drink": "drinks",
+    "drinks": "drinks",
+    "dessert": "desserts",
+    "desserts": "desserts",
+}
+
+ITEM_ALIASES = {
+    "chaap": "Tandoori Soya Chaap",
+    "chap": "Tandoori Soya Chaap",
+    "soya chaap": "Tandoori Soya Chaap",
+    "soya chap": "Tandoori Soya Chaap",
+    "soy chaap": "Tandoori Soya Chaap",
+    "soy chap": "Tandoori Soya Chaap",
+    "सोया चाप": "Tandoori Soya Chaap",
+    "चाप": "Tandoori Soya Chaap",
+    "चाप": "Tandoori Soya Chaap",
+    "fish": "Fish Pakora",
+    "fish pakora": "Fish Pakora",
+    "fish tikka": "Tandoori Fish Tikka",
+    "tandoori fish": "Tandoori Fish Tikka",
+    "tandoori fish tikka": "Tandoori Fish Tikka",
+    "chili chicken": "Chilli Chicken",
+    "chilli chicken": "Chilli Chicken",
+    "paneer tikka": "Paneer Tikka",
+}
+
 BUSINESS_INFO = """
 Restaurant Name: Bizbull Restaurant
 Cuisine: Punjabi Indian
@@ -247,18 +299,38 @@ get_menu_tool_description = ChatCompletionFunctionToolParam(
                     "description": "Menu category to fetch. Use 'all' for the full menu.",
                     "enum": [
                         "all",
+                        "mains",
+                        "main",
                         "appetizers",
+                        "starter",
+                        "starters",
                         "tandoori",
+                        "grill",
+                        "grilled",
+                        "chaap",
                         "chicken_mains",
+                        "chicken",
                         "lamb_goat_mains",
+                        "lamb",
+                        "goat",
                         "seafood_mains",
+                        "seafood",
+                        "fish",
+                        "prawn",
                         "vegetarian_mains",
+                        "vegetarian",
+                        "veg",
+                        "paneer",
                         "bread",
                         "rice",
                         "combos",
+                        "combo",
+                        "thali",
                         "sides",
                         "drinks",
+                        "drink",
                         "desserts",
+                        "dessert",
                     ],
                 },
             },
@@ -270,9 +342,19 @@ get_menu_tool_description = ChatCompletionFunctionToolParam(
 
 async def get_menu(category: str) -> dict:
     print(f"Running Tool: get_menu(category='{category}')")
+    category = normalize_menu_category(category)
 
     if category == "all":
         return {"menu": MENU, "info": BUSINESS_INFO}
+
+    if category == "all_mains":
+        mains = (
+            MENU["chicken_mains"]
+            + MENU["lamb_goat_mains"]
+            + MENU["seafood_mains"]
+            + MENU["vegetarian_mains"]
+        )
+        return {"category": category, "items": mains}
 
     if category in MENU:
         return {"category": category, "items": MENU[category]}
@@ -304,8 +386,18 @@ check_item_availability_tool_description = ChatCompletionFunctionToolParam(
 async def check_item_availability(item_name: str) -> dict:
     print(f"Running Tool: check_item_availability(item_name='{item_name}')")
 
+    category = normalize_menu_category(item_name)
+    if category in MENU or category == "all_mains":
+        menu_result = await get_menu(category)
+        return {
+            "available": bool(menu_result.get("items") or menu_result.get("menu")),
+            "category": category,
+            "items": menu_result.get("items", []),
+            "message": f"Available {item_name} options found.",
+        }
+
     # Check across all categories
-    item_name_lower = item_name.lower()
+    item_name_lower = normalize_item_name(item_name).lower()
     for category, items in MENU.items():
         for item in items:
             if item_name_lower in item["name"].lower():
@@ -317,6 +409,18 @@ async def check_item_availability(item_name: str) -> dict:
                 }
 
     return {"available": False, "message": f"Sorry, {item_name} is not on our menu."}
+
+
+def normalize_menu_category(value: str) -> str:
+    value_lower = value.strip().lower()
+    if value_lower in MENU:
+        return value_lower
+    return MENU_CATEGORY_ALIASES.get(value_lower, value_lower)
+
+
+def normalize_item_name(value: str) -> str:
+    value_lower = value.strip().lower()
+    return ITEM_ALIASES.get(value_lower, value)
 
 
 # ─── Tool 3: Place Order ───────────────────────────────────────────────────────
