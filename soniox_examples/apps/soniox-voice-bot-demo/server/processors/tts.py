@@ -115,6 +115,10 @@ class TTSProcessor(MessageProcessor):
             # Stop TTS if any user speech is detected (either with transcription or VAD)
             self._cancel_generation()
 
+    async def _on_stream_finalized(self):
+        """Called after each TTS stream completes. Override in subclasses to react."""
+        pass
+
     def _cancel_generation(self):
         # Soniox doesn't have support for cancelling in-progress TTS streams,
         # but we can achieve a similar effect by simply knowing the stream ID
@@ -232,6 +236,7 @@ class TTSProcessor(MessageProcessor):
                                 MetricsMessage("tts_total_ms", total_ms)
                             )
                         self._active_stream_id = None
+                        await self._on_stream_finalized()
 
                 error_code = content.get("error_code")
                 error_message = content.get("error_message")

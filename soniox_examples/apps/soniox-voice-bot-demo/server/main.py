@@ -13,7 +13,7 @@ from websockets import ServerConnection
 from websockets.asyncio.server import serve
 
 from languages import LANGUAGES, LANGUAGES_MAP
-from messages import ErrorMessage
+from messages import ErrorMessage, TransferCallMessage
 from processors.llm import LLMProcessor
 from processors.message_processor import MessageProcessor
 from processors.stt import STTProcessor
@@ -86,6 +86,9 @@ class DynamicTTSProcessor(TTSProcessor):
 
     When select_language tool updates state mid-call, the next spoken
     response automatically uses the correct language and voice.
+
+    When transfer_call tool sets state.transfer_requested, fires
+    TransferCallMessage after the goodbye audio finishes playing.
     """
 
     def __init__(self, state: RestaurantState, **kwargs):
@@ -97,6 +100,11 @@ class DynamicTTSProcessor(TTSProcessor):
             self._language = self._state.tts_language
             self._voice = self._state.tts_voice
         await super()._generate_tts_response(message)
+
+    async def _on_stream_finalized(self):
+        if self._state.transfer_requested and self._send_message:
+            self._state.transfer_requested = False
+            await self._send_message(TransferCallMessage(self._state.transfer_reason))
 
 
 class QueryParams(pydantic.BaseModel):

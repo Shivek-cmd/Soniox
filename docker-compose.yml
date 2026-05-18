@@ -15,8 +15,12 @@ services:
       context: ./soniox_examples/apps/soniox-voice-bot-demo/twilio
     environment:
       - SONIOX_VOICE_BOT_WS_URL=ws://voice-server:8765
-      - VOICE_BOT_LANGUAGE=en
+      - VOICE_BOT_LANGUAGE=pa
       - VOICE_BOT_VOICE=Maya
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - OWNER_PHONE_NUMBER=${OWNER_PHONE_NUMBER}
+      - NGROK_URL=${NGROK_URL}
     depends_on:
       - voice-server
     restart: unless-stopped

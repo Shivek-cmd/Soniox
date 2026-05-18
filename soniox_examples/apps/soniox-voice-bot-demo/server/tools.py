@@ -16,6 +16,8 @@ class RestaurantState:
     def __init__(self):
         self.tts_language = "en"
         self.tts_voice = "Maya"
+        self.transfer_requested = False
+        self.transfer_reason = ""
 
 MENU = {
     "appetizers": [
@@ -211,18 +213,44 @@ VOICE RULES (very important):
 - Use natural filler phrases like "Sure!", "Of course!", "Great choice!" to sound human.
 - If you didn't understand something, say "Sorry, could you say that again?" — not "I didn't catch that."
 - Never repeat the customer's full order back word for word until final confirmation.
-- When confirming the order, mention item names only — never mention individual prices. Only say the total amount.
-- Only share individual item prices if the customer specifically asks.
+- Never mention item prices during normal ordering, menu recommendations, or order recap unless the customer specifically asks for prices.
+- When confirming the order, mention item names only. Do not mention individual prices.
+- Only say the total amount when the customer asks for the total, or at the final "go ahead and place that?" confirmation.
 - Speak conversationally — short, warm, natural.
+- Customer names, phone numbers, order totals, and prices are always spoken in English, even when the rest of the call is Punjabi or Hindi.
+- Phone numbers must always be read digit by digit in English words or English digits. Never translate digits into Hindi or Punjabi.
+- Names must always be repeated or spelled using English letters only, for example "H-A-R-P-R-E-E-T".
+- Prices and totals must always be said in English, for example "eighteen dollars" or "the total is thirty two dollars", never translated into Hindi or Punjabi.
+- If the customer corrects their name or phone number, always repeat the corrected value back and ask for confirmation before continuing.
 
 HOW TO HANDLE THE CALL:
 1. Greet warmly: "Hi! This is Sierra calling from Bizbull Restaurant. Would you like to continue in English, Hindi, or Punjabi?"
 2. The moment the customer replies with their language — call `select_language` IMMEDIATELY (before saying anything else). This switches the voice to match their language.
 3. Then greet them in their chosen language and ask dine-in, pickup, or delivery.
-4. Help them order — use get_menu only when they ask what's available or about a specific dish.
-5. Once they seem done ordering, say the total and confirm.
-6. Place the order with place_order.
-7. Tell them the wait time and say goodbye warmly.
+4. Help them order — use get_menu only when they ask what's available, ask about a specific dish, or ask for prices. If the tool returns prices, do not speak those prices unless the customer asked.
+5. Once the customer seems done ordering, wrap up in this exact order:
+   a. Special instructions — if the customer has NOT already mentioned any dietary needs or special requests, ask once: "Any special instructions or allergies I should note?" If they say no or have already mentioned something, move on immediately.
+   b. First name — ask for their first name only (not full name). One short question.
+   c. Confirm the name before asking for the phone number. Repeat or spell the name in English letters only, even if speaking another language. Example: "And that's S-H-I-V-E-K, correct?" Wait for the customer to confirm the name.
+   d. If the customer corrects the name, repeat the corrected name back in English letters and ask again if it is correct. Do not move to phone number until the customer confirms the name.
+   e. Phone number — ask for their phone number only after the name is confirmed. Then read it back digit by digit in English, even if the rest of the call is in Punjabi or Hindi. Example: "That's nine four one, three seven five, two six eight eight — is that right?" Wait for confirmation before continuing.
+   f. If the customer corrects the phone number, repeat the corrected full phone number digit by digit in English and ask again if it is right. Do not move on until the customer confirms the phone number.
+   g. Briefly confirm the order items. Say the total amount in English only at this final confirmation step, then ask: "Shall I go ahead and place that?"
+6. Once confirmed, place the order with place_order.
+7. Tell them the estimated wait time and say goodbye warmly.
+
+CALL TRANSFER — use the transfer_call tool in these situations. Do not attempt to handle them yourself:
+1. Customer asks to speak to a human, manager, owner, or anyone at the restaurant.
+2. Customer complains about a previous order — wrong items, cold food, late delivery, or wants a refund.
+3. Customer mentions catering, an event, or ordering for a large group (10 or more people).
+4. Customer asks about halal certification, specific allergens, or whether a dish is Jain or vegan — anything you cannot safely confirm.
+5. You have asked the customer to repeat themselves 3 or more times in a row and still cannot understand them.
+
+When transferring:
+- Call transfer_call immediately when you detect the situation — before generating any spoken response.
+- After the tool responds, say exactly one short warm sentence: "Let me connect you with our team right away."
+- Do not say anything else after that sentence. Stop completely.
+- Do not apologize, do not explain why.
 
 UPSELLING (like a good waiter — subtle, natural, maximum once or twice per call):
 - When someone orders a main dish with no bread → casually mention "Garlic naan goes really well with that, want to add one?"
@@ -254,7 +282,42 @@ Today is {datetime.now().strftime("%A, %B %d, %Y")}. Restaurant hours: 11 AM to 
 """
 
 
-# ─── Tool 0: Select Language ──────────────────────────────────────────────────
+# ─── Tool 0: Transfer Call ────────────────────────────────────────────────────
+
+transfer_call_tool_description = ChatCompletionFunctionToolParam(
+    type="function",
+    function={
+        "name": "transfer_call",
+        "description": (
+            "Transfer the call to a restaurant staff member. "
+            "Call this when: (1) customer asks to speak to a human/manager/owner, "
+            "(2) customer complains about a previous order or wants a refund, "
+            "(3) customer wants catering or ordering for 10+ people, "
+            "(4) customer asks about halal certification or specific allergens you cannot confirm, "
+            "(5) you have failed to understand the customer 3 or more times in a row."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string",
+                    "enum": [
+                        "customer_requested",
+                        "complaint",
+                        "catering",
+                        "allergy_or_certification",
+                        "comprehension_issue",
+                    ],
+                    "description": "The reason for transferring the call.",
+                },
+            },
+            "required": ["reason"],
+        },
+    },
+)
+
+
+# ─── Tool 1: Select Language ──────────────────────────────────────────────────
 
 select_language_tool_description = ChatCompletionFunctionToolParam(
     type="function",
@@ -280,7 +343,7 @@ select_language_tool_description = ChatCompletionFunctionToolParam(
 )
 
 
-# ─── Tool 1: Get Menu ─────────────────────────────────────────────────────────
+# ─── Tool 2: Get Menu ─────────────────────────────────────────────────────────
 
 get_menu_tool_description = ChatCompletionFunctionToolParam(
     type="function",
@@ -362,7 +425,7 @@ async def get_menu(category: str) -> dict:
     return {"error": "Category not found"}
 
 
-# ─── Tool 2: Check Item Availability ──────────────────────────────────────────
+# ─── Tool 3: Check Item Availability ──────────────────────────────────────────
 
 check_item_availability_tool_description = ChatCompletionFunctionToolParam(
     type="function",
@@ -423,7 +486,7 @@ def normalize_item_name(value: str) -> str:
     return ITEM_ALIASES.get(value_lower, value)
 
 
-# ─── Tool 3: Place Order ───────────────────────────────────────────────────────
+# ─── Tool 4: Place Order ───────────────────────────────────────────────────────
 
 place_order_tool_description = ChatCompletionFunctionToolParam(
     type="function",
@@ -517,6 +580,16 @@ async def place_order(
 # ─── Register Tools ────────────────────────────────────────────────────────────
 
 def get_tools(state: RestaurantState):
+    async def transfer_call(reason: str) -> str:
+        print(f"Running Tool: transfer_call(reason='{reason}')")
+        state.transfer_requested = True
+        state.transfer_reason = reason
+        return (
+            "Transfer initiated. Say exactly one warm sentence: "
+            "'Let me connect you with our team right away.' "
+            "Then stop speaking completely — do not say anything else."
+        )
+
     async def select_language(language: str) -> str:
         print(f"Running Tool: select_language(language='{language}')")
         config = LANGUAGE_CONFIG.get(language.lower(), LANGUAGE_CONFIG["english"])
@@ -525,6 +598,7 @@ def get_tools(state: RestaurantState):
         return f"Language switched to {language}. Now respond in {language}."
 
     return [
+        (transfer_call_tool_description, transfer_call),
         (select_language_tool_description, select_language),
         (get_menu_tool_description, get_menu),
         (check_item_availability_tool_description, check_item_availability),

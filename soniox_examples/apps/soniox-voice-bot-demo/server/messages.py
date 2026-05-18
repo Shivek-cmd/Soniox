@@ -137,3 +137,14 @@ class UserSpeechStartMessage(Message):
 class UserSpeechEndMessage(Message):
     def json(self):
         return json.dumps({"type": "user_speech_end"})
+
+
+class TransferCallMessage(Message):
+    def __init__(self, reason: str = ""):
+        self._reason = reason
+
+    def reason(self):
+        return self._reason
+
+    def json(self):
+        return json.dumps({"type": "transfer", "reason": self._reason})

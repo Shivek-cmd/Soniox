@@ -13,7 +13,8 @@ from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import HTMLResponse
 from fastapi.websockets import WebSocketDisconnect
 
-from twilio.twiml.voice_response import Connect, VoiceResponse
+from twilio.rest import Client as TwilioRestClient
+from twilio.twiml.voice_response import Connect, Dial, Number, VoiceResponse
 
 load_dotenv()
 
@@ -23,10 +24,21 @@ SONIOX_VOICE_BOT_WS_URL = os.getenv("SONIOX_VOICE_BOT_WS_URL", "")
 VOICE_BOT_LANGUAGE = os.getenv("VOICE_BOT_LANGUAGE", "en")
 VOICE_BOT_VOICE = os.getenv("VOICE_BOT_VOICE", "Maya")
 
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+OWNER_PHONE_NUMBER = os.getenv("OWNER_PHONE_NUMBER", "")
+NGROK_URL = os.getenv("NGROK_URL", "")
+
 if not SONIOX_VOICE_BOT_WS_URL:
     raise ValueError(
         "Missing the SONIOX_VOICE_BOT_WS_URL. Please set it in the .env file."
     )
+
+if not OWNER_PHONE_NUMBER:
+    print("WARNING: OWNER_PHONE_NUMBER is not set. Call transfer will log but not connect.")
+
+if not NGROK_URL:
+    print("WARNING: NGROK_URL is not set. Call transfer will not work.")
 
 
 app = FastAPI()
@@ -45,25 +57,42 @@ async def handle_incoming_call(request: Request):
     return HTMLResponse(content=str(response), media_type="application/xml")
 
 
+@app.api_route("/transfer-twiml", methods=["GET", "POST"])
+async def handle_transfer_twiml(request: Request):
+    """TwiML returned when Twilio redirects a call for transfer to the restaurant owner."""
+    response = VoiceResponse()
+
+    if OWNER_PHONE_NUMBER:
+        dial = Dial()
+        dial.number(OWNER_PHONE_NUMBER)
+        response.append(dial)
+    else:
+        response.say("We're sorry, we could not complete the transfer. Please call back.")
+
+    return HTMLResponse(content=str(response), media_type="application/xml")
+
+
 @app.websocket("/media-stream")
 async def handle_media_stream(websocket: WebSocket):
     """Handle WebSocket connections between Twilio and Soniox voice bot."""
     await websocket.accept()
 
-    # Tell the bot that the input will be in 16-bit PCM format.
-    # The output format is currently fixed to whatever TTS produces.
-    voice_bot_url_with_params = f"{SONIOX_VOICE_BOT_WS_URL}?audio_in_format=mulaw&audio_in_sample_rate=8000&audio_in_num_channels=1&language={VOICE_BOT_LANGUAGE}&voice={VOICE_BOT_VOICE}"
+    voice_bot_url_with_params = (
+        f"{SONIOX_VOICE_BOT_WS_URL}"
+        f"?audio_in_format=mulaw&audio_in_sample_rate=8000&audio_in_num_channels=1"
+        f"&language={VOICE_BOT_LANGUAGE}&voice={VOICE_BOT_VOICE}"
+    )
     async with websockets.connect(voice_bot_url_with_params) as voicebot_ws:
-        # Connection specific state
+        # Per-call state
         stream_sid = None
+        call_sid = None
 
-        # Queue to track 'mark' messages sent to Twilio
-        # This helps implement interruption
+        # Queue to track 'mark' messages sent to Twilio — used for barge-in
         mark_queue = []
 
         async def receive_from_twilio():
-            """Receive audio data from Twilio and send it to the Soniox voice bot."""
-            nonlocal stream_sid
+            """Receive audio data from Twilio and forward it to the voice bot."""
+            nonlocal stream_sid, call_sid
             try:
                 async for message in websocket.iter_text():
                     data = json.loads(message)
@@ -73,68 +102,98 @@ async def handle_media_stream(websocket: WebSocket):
                         await voicebot_ws.send(ulaw_audio_bytes)
                     elif data["event"] == "start":
                         stream_sid = data["start"]["streamSid"]
-                        print(f"Incoming stream has started {stream_sid}")
+                        call_sid = data["start"]["callSid"]
+                        print(f"Stream started: stream_sid={stream_sid} call_sid={call_sid}")
                     elif data["event"] == "mark":
                         if mark_queue:
                             mark_queue.pop(0)
                     elif data["event"] == "stop":
-                        print(f"Twilio stream {stream_sid} has stopped.")
+                        print(f"Twilio stream {stream_sid} stopped.")
                         break
             except WebSocketDisconnect:
-                print("Client disconnected.")
+                print("Twilio client disconnected.")
 
         async def send_to_twilio():
-            """Receive events from the Soniox voice bot server, send audio back to Twilio."""
-            nonlocal stream_sid
+            """Receive events from the voice bot, send audio back to Twilio."""
+            nonlocal stream_sid, call_sid
             try:
                 async for message in voicebot_ws:
                     if isinstance(message, str):
-                        print(f"Received event: {message}")
-                        message = json.loads(message)
-                        if message["type"] == "transcription" and message.get("final_text"):
-                            # Only barge-in on final transcription, not every partial word
+                        event = json.loads(message)
+                        event_type = event.get("type")
+
+                        if event_type == "transcription" and event.get("final_text"):
+                            # Barge-in: customer started speaking — cut bot audio
                             await handle_speech_started_event()
+
+                        elif event_type == "transfer":
+                            reason = event.get("reason", "unknown")
+                            print(f"Call transfer requested. reason={reason} call_sid={call_sid}")
+                            await initiate_call_transfer(call_sid, reason)
+
+                        else:
+                            print(f"Received event: {message}")
                     else:
-                        # pcm_audio_bytes from OpenAI TTS: 24kHz, 16-bit signed, little-endian, mono
+                        # Raw PCM audio from Soniox TTS (24kHz, 16-bit, mono)
                         pcm_audio_bytes = message
 
-                        # Resample to 8kHz
-                        pcm_audio_bytes_8k = audioop.ratecv(
-                            pcm_audio_bytes, 2, 1, 24000, 8000, None
-                        )[0]
-                        # Convert to 8-bit µ-law
-                        ulaw_audio_bytes = audioop.lin2ulaw(pcm_audio_bytes_8k, 2)
+                        # Resample to 8kHz and convert to µ-law for Twilio
+                        pcm_8k = audioop.ratecv(pcm_audio_bytes, 2, 1, 24000, 8000, None)[0]
+                        ulaw_audio_bytes = audioop.lin2ulaw(pcm_8k, 2)
 
-                        audio_payload = base64.b64encode(ulaw_audio_bytes).decode(
-                            "utf-8"
-                        )
-                        audio_delta = {
+                        audio_payload = base64.b64encode(ulaw_audio_bytes).decode("utf-8")
+                        await websocket.send_json({
                             "event": "media",
                             "streamSid": stream_sid,
                             "media": {"payload": audio_payload},
-                        }
-                        await websocket.send_json(audio_delta)
+                        })
                         await send_mark(websocket, stream_sid)
 
             except Exception as e:
                 print(f"Error in send_to_twilio: {e}")
 
         async def handle_speech_started_event():
-            """If the bot is speaking (items in mark_queue), send a 'clear' message to Twilio to interrupt it."""
-            print("Handling speech started event.")
+            """Cut bot audio if customer speaks while bot is talking."""
             if mark_queue:
                 await websocket.send_json({"event": "clear", "streamSid": stream_sid})
                 mark_queue.clear()
 
-        async def send_mark(connection, stream_sid):
-            if stream_sid:
-                mark_event = {
+        async def send_mark(connection, sid):
+            if sid:
+                await connection.send_json({
                     "event": "mark",
-                    "streamSid": stream_sid,
+                    "streamSid": sid,
                     "mark": {"name": "responsePart"},
-                }
-                await connection.send_json(mark_event)
+                })
                 mark_queue.append("responsePart")
+
+        async def initiate_call_transfer(cid: str | None, reason: str):
+            """Redirect the live call to the restaurant owner via Twilio REST API."""
+            if not cid:
+                print("Cannot transfer: call_sid not available yet.")
+                return
+            if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
+                print("Cannot transfer: Twilio credentials not configured.")
+                return
+            if not OWNER_PHONE_NUMBER:
+                print("Cannot transfer: OWNER_PHONE_NUMBER not configured.")
+                return
+            if not NGROK_URL:
+                print("Cannot transfer: NGROK_URL not configured.")
+                return
+
+            transfer_url = f"{NGROK_URL}/transfer-twiml"
+            print(f"Redirecting call {cid} to {transfer_url} (reason={reason})")
+
+            def do_redirect():
+                client = TwilioRestClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+                client.calls(cid).update(url=transfer_url, method="GET")
+
+            try:
+                await asyncio.to_thread(do_redirect)
+                print(f"Call {cid} successfully redirected to owner.")
+            except Exception as e:
+                print(f"Failed to redirect call {cid}: {e}")
 
         receive_task = asyncio.create_task(receive_from_twilio())
         send_task = asyncio.create_task(send_to_twilio())

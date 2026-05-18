@@ -36,15 +36,22 @@ OPENING_GREETING = (
 LANGUAGE_PROMPT = "Would you like to continue in English, Hindi, or Punjabi?"
 
 LANGUAGE_SELECTION_TERMS = {
+    # English variants
     "english",
+    "अंग्रेजी",   # Devanagari
+    "इंग्लिश",   # Devanagari phonetic
+    "ਅੰਗਰੇਜ਼ੀ",  # Gurmukhi
+    "ਇੰਗਲਿਸ਼",  # Gurmukhi phonetic
+    # Hindi variants
     "hindi",
-    "punjabi",
-    "अंग्रेजी",
-    "इंग्लिश",
     "हिंदी",
     "हिन्दी",
-    "ਪੰਜਾਬੀ",
+    "ਹਿੰਦੀ",     # Gurmukhi
+    # Punjabi variants
+    "punjabi",
+    "ਪੰਜਾਬੀ",   # Gurmukhi
     "ਪੰਜابی",
+    "पंजाबी",   # Devanagari — STT sometimes outputs this for "Punjabi"
 }
 
 
@@ -246,7 +253,10 @@ class LLMProcessor(MessageProcessor):
             if not normalized_assistant:
                 continue
 
-            if normalized_text in normalized_assistant:
+            # Substring check only for longer phrases — short words like "Punjabi",
+            # "Hindi", "English" appear verbatim in the bot's greeting and would be
+            # falsely dropped if we checked substrings for them.
+            if len(normalized_text) > 20 and normalized_text in normalized_assistant:
                 return True
 
             similarity = SequenceMatcher(

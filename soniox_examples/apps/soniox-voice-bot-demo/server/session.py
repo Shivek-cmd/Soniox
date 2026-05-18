@@ -12,6 +12,7 @@ from messages import (
     MetricsMessage,
     SessionStartMessage,
     TranscriptionMessage,
+    TransferCallMessage,
     TTSAudioMessage,
     UserAudioMessage,
     UserSpeechEndMessage,
@@ -140,6 +141,9 @@ class Session:
                 await self.send_message_queue.put(message.json())
 
             if isinstance(message, UserSpeechEndMessage):
+                await self.send_message_queue.put(message.json())
+
+            if isinstance(message, TransferCallMessage):
                 await self.send_message_queue.put(message.json())
 
             if isinstance(message, ErrorMessage):
