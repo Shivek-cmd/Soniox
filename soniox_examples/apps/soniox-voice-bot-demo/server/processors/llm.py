@@ -81,8 +81,8 @@ LANGUAGE_SELECTION_PATTERNS = {
 
 LANGUAGE_SELECTED_RESPONSES = {
     "english": "Of course! Is this for pickup, delivery, or dine-in?",
-    "hindi": "Bilkul! Yeh pickup, delivery, ya dine-in ke liye hai?",
-    "punjabi": "Bilkul ji! Eh pickup, delivery, ya dine-in layi hai?",
+    "hindi": "बिलकुल! यह pickup, delivery, या dine-in के लिए है?",
+    "punjabi": "ਬਿਲਕੁਲ ji! ਇਹ pickup, delivery, ਜਾਂ dine-in ਲਈ ਹੈ?",
 }
 
 
