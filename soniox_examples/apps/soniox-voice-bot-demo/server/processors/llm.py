@@ -29,7 +29,7 @@ from messages import (
 from processors.message_processor import MessageProcessor
 
 OPENING_GREETING = (
-    "Hi! This is Sierra calling from Parkaash Sweets. "
+    "Hi! This is Sierra calling from Prakaash Sweets. "
     "Would you like to continue in English, Hindi, or Punjabi?"
 )
 

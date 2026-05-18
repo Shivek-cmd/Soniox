@@ -12,7 +12,7 @@ import websockets
 load_dotenv()
 
 GREETING_TEXT = (
-    "Hi! This is Sierra calling from Parkaash Sweets. "
+    "Hi! This is Sierra calling from Prakaash Sweets. "
     "Would you like to continue in English, Hindi, or Punjabi?"
 )
 
