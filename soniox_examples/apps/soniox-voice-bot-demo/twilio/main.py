@@ -143,13 +143,14 @@ async def handle_media_stream(websocket: WebSocket):
         stream_sid = None
         call_sid = None
         opening_greeting_sent = False
+        opening_greeting_task = None
 
         # Queue to track 'mark' messages sent to Twilio — used for barge-in
         mark_queue = []
 
         async def receive_from_twilio():
             """Receive audio data from Twilio and forward it to the voice bot."""
-            nonlocal stream_sid, call_sid, opening_greeting_sent
+            nonlocal stream_sid, call_sid, opening_greeting_sent, opening_greeting_task
             try:
                 async for message in websocket.iter_text():
                     data = json.loads(message)
@@ -163,7 +164,7 @@ async def handle_media_stream(websocket: WebSocket):
                         print(f"Stream started: stream_sid={stream_sid} call_sid={call_sid}")
                         if opening_greeting_ulaw and not opening_greeting_sent:
                             opening_greeting_sent = True
-                            asyncio.create_task(send_cached_opening_greeting())
+                            opening_greeting_task = asyncio.create_task(send_cached_opening_greeting())
                     elif data["event"] == "mark":
                         if mark_queue:
                             mark_queue.pop(0)
@@ -182,7 +183,7 @@ async def handle_media_stream(websocket: WebSocket):
                         event = json.loads(message)
                         event_type = event.get("type")
 
-                        if event_type == "transcription" and event.get("final_text"):
+                        if event_type in {"user_speech_start", "transcription"}:
                             # Barge-in: customer started speaking — cut bot audio
                             await handle_speech_started_event()
 
@@ -214,6 +215,10 @@ async def handle_media_stream(websocket: WebSocket):
 
         async def handle_speech_started_event():
             """Cut bot audio if customer speaks while bot is talking."""
+            nonlocal opening_greeting_task
+            if opening_greeting_task and not opening_greeting_task.done():
+                opening_greeting_task.cancel()
+                opening_greeting_task = None
             if mark_queue:
                 await websocket.send_json({"event": "clear", "streamSid": stream_sid})
                 mark_queue.clear()
@@ -235,18 +240,22 @@ async def handle_media_stream(websocket: WebSocket):
             chunk_size = 160  # 20ms at 8kHz mulaw.
             print("Sending cached opening greeting to Twilio.")
             mark_queue.append("cachedOpeningGreeting")
-            for start in range(0, len(opening_greeting_ulaw), chunk_size):
-                if not stream_sid:
-                    return
+            try:
+                for start in range(0, len(opening_greeting_ulaw), chunk_size):
+                    if not stream_sid:
+                        return
 
-                chunk = opening_greeting_ulaw[start:start + chunk_size]
-                audio_payload = base64.b64encode(chunk).decode("utf-8")
-                await websocket.send_json({
-                    "event": "media",
-                    "streamSid": stream_sid,
-                    "media": {"payload": audio_payload},
-                })
-                await asyncio.sleep(0.02)
+                    chunk = opening_greeting_ulaw[start:start + chunk_size]
+                    audio_payload = base64.b64encode(chunk).decode("utf-8")
+                    await websocket.send_json({
+                        "event": "media",
+                        "streamSid": stream_sid,
+                        "media": {"payload": audio_payload},
+                    })
+                    await asyncio.sleep(0.02)
+            except asyncio.CancelledError:
+                print("Cached opening greeting cancelled by caller speech.")
+                return
 
             if stream_sid:
                 await websocket.send_json({
