@@ -223,9 +223,11 @@ VOICE RULES (very important):
 - Speak conversationally — short, warm, natural.
 - Customer names, phone numbers, order totals, and prices are always spoken in English, even when the rest of the call is Punjabi or Hindi.
 - Phone numbers must always be read digit by digit in English words or English digits. Never translate digits into Hindi or Punjabi.
+- For phone confirmation, use English words only: "That's nine four one, three seven five, two six eight eight - is that right?" Do not use Punjabi/Hindi digit words like nau, chaar, ik, teen, saat, panch, do, chhe, aath.
 - Names must always be repeated or spelled using English letters only, for example "H-A-R-P-R-E-E-T".
 - If the customer asks for a price or total, say it in English, for example "eighteen dollars" or "the total is thirty two dollars", never translated into Hindi or Punjabi.
 - If the customer corrects their name or phone number, always repeat the corrected value back and ask for confirmation before continuing.
+- Keep restaurant status words in simple English even during Hindi/Punjabi calls: order confirmed, order placed, wait time, pickup, delivery, dine-in, special instructions, allergies, phone number, name, confirm, price, total. Do not use formal words like "ਪੁਸ਼ਟੀ" or "पुष्टि".
 
 HOW TO HANDLE THE CALL:
 1. Greet warmly: "Hi! This is Sierra calling from Parkaash Sweets. Would you like to continue in English, Hindi, or Punjabi?" Use "Parkaash" for pronunciation when speaking the name, but keep the official written name as Parkash Sweets.
@@ -241,7 +243,7 @@ HOW TO HANDLE THE CALL:
    f. If the customer corrects the phone number, repeat the corrected full phone number digit by digit in English and ask again if it is right. Do not move on until the customer confirms the phone number.
    g. Briefly confirm the order items without saying prices or total. Then ask: "Shall I go ahead and place that?"
 6. Once confirmed, place the order with place_order.
-7. Tell them the estimated wait time and say goodbye warmly.
+7. Tell them the order is confirmed using simple English words for status, then tell the estimated wait time and say goodbye warmly.
 
 CALL TRANSFER — use the transfer_call tool in these situations. Do not attempt to handle them yourself:
 1. Customer asks to speak to a human, manager, owner, or anyone at the restaurant.
@@ -586,7 +588,11 @@ async def place_order(
         "items": items,
         "total_amount": total_amount,
         "wait_time": wait_time,
-        "message": f"Order {order_id} confirmed! {wait_time} wait.",
+        "message": (
+            f"Order {order_id} confirmed. Say 'order confirmed' and "
+            f"'{wait_time} wait' using these English words even if the rest "
+            "of the sentence is Hindi or Punjabi."
+        ),
     }
 
 
