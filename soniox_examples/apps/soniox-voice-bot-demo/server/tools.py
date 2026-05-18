@@ -2,7 +2,8 @@ from datetime import datetime
 
 from openai.types.chat import ChatCompletionFunctionToolParam
 
-RESTAURANT_NAME = "Bizbull Restaurant"
+RESTAURANT_NAME = "Parkash Sweets"
+SPOKEN_RESTAURANT_NAME = "Parkaash Sweets"
 
 LANGUAGE_CONFIG = {
     "english": {"tts_language": "en", "tts_voice": "Maya"},
@@ -20,191 +21,194 @@ class RestaurantState:
         self.transfer_reason = ""
 
 MENU = {
-    "appetizers": [
-        {"name": "Samosa (2 pcs)", "price": 7},
-        {"name": "Paneer Pakora", "price": 13},
-        {"name": "Veg Pakora", "price": 10},
-        {"name": "Fish Pakora", "price": 16},
-        {"name": "Chicken Pakora", "price": 15},
-        {"name": "Aloo Tikki (2 pcs)", "price": 9},
-        {"name": "Papdi Chaat", "price": 11},
-        {"name": "Dahi Bhalla", "price": 11},
-        {"name": "Amritsari Kulcha Chole", "price": 15},
-        {"name": "Tandoori Chicken Half", "price": 18},
-        {"name": "Chicken Tikka", "price": 17},
-        {"name": "Malai Chicken Tikka", "price": 18},
-        {"name": "Seekh Kebab", "price": 17},
+    "samosa": [
+        {"name": "Aloo Samosa (2 pcs)", "price": 3.00, "description": "Fried dough stuffed with spiced potato and peas."},
+        {"name": "Noodle Samosa (2 pcs)", "price": 4.50, "description": "Fried dough stuffed with noodles and juicy veggies with soya sauce and vinegar."},
     ],
-    "tandoori": [
-        {"name": "Tandoori Chicken Full", "price": 28},
-        {"name": "Tandoori Chicken Half", "price": 18},
-        {"name": "Chicken Tikka", "price": 17},
-        {"name": "Malai Chicken Tikka", "price": 18},
-        {"name": "Tandoori Fish Tikka", "price": 20},
-        {"name": "Paneer Tikka", "price": 17},
-        {"name": "Tandoori Soya Chaap", "price": 16},
+    "parkash_classic": [
+        {"name": "Chole Bhatura", "price": 7.99, "description": "Chickpeas curry with two fried bhature."},
+        {"name": "Choley Puri", "price": 7.99, "description": "Chickpeas curry with three puris."},
+        {"name": "Aloo Puri", "price": 7.99, "description": "Tangy aloo curry with three puris."},
     ],
-    "chicken_mains": [
-        {"name": "Butter Chicken", "price": 18},
-        {"name": "Chicken Tikka Masala", "price": 18},
-        {"name": "Saag Chicken", "price": 18},
-        {"name": "Chicken Curry", "price": 17},
-        {"name": "Kadai Chicken", "price": 18},
-        {"name": "Chicken Vindaloo", "price": 18},
-        {"name": "Chicken Korma", "price": 18},
-        {"name": "Chilli Chicken", "price": 18},
+    "chaat": [
+        {"name": "Chaat Papdi", "price": 5.99, "description": "Crispy chips with potatoes, onions, chickpeas, yogurt, mint and tamarind chutney."},
+        {"name": "Dahi Bhalla", "price": 5.99, "description": "Soft lentil dumplings in chilled yogurt with tamarind chutney and spices."},
+        {"name": "Samosa Choley", "price": 6.50, "description": "Two aloo samosas with spicy chickpeas, yogurt and chutney."},
+        {"name": "Tawa Tikki Chaat", "price": 6.00, "description": "Crisp potato patty topped with yogurt, tamarind, mint sauce and salad."},
+        {"name": "Tawa Tikki Choley", "price": 7.50, "description": "Crisp potato patty with chickpea curry, yogurt, tamarind, mint sauce and salad."},
+        {"name": "Aloo Besan Tikki Chaat", "price": 5.00, "description": "Potato patty made with peas, onions, gram flour and spices with yogurt, tamarind and mint sauce."},
     ],
-    "lamb_goat_mains": [
-        {"name": "Lamb Curry", "price": 20},
-        {"name": "Lamb Vindaloo", "price": 20},
-        {"name": "Lamb Korma", "price": 20},
-        {"name": "Goat Curry", "price": 20},
-        {"name": "Goat Masala", "price": 21},
-        {"name": "Saag Goat", "price": 21},
+    "pakora": [
+        {"name": "Mix Veg Pakora", "price": 8.50, "description": "Spinach fritters with gram flour, spices, cauliflower, onions, potatoes and spinach."},
+        {"name": "Baingan Pakora", "price": 8.50, "description": "Thin slices of eggplant dipped in spiced gram flour batter and fried."},
+        {"name": "Spring Roll", "price": 8.00, "description": "Cabbage, noodles, carrots and onions wrapped in a flaky crispy roll."},
+        {"name": "Aloo Cutlet", "price": 10.50, "description": "Crispy mashed potato with spices and herbs."},
+        {"name": "Parkash Platter", "price": 15.99, "description": "Assorted vegetable pakoras, paneer, gobi, aloo fingers, baingan, aloo cutlets, hara bara kababs, mushroom, bread rolls, dahi kabab and mirchi."},
+        {"name": "Paneer Pakora", "price": 11.50, "description": "Indian cottage cheese pieces coated in spiced gram batter and deep fried."},
+        {"name": "Mirchi Pakora", "price": 10.50, "description": "Stuffed green chili fritters with gram flour, spices and herbs."},
+        {"name": "Hara Bara Kabab", "price": 10.50, "description": "Spinach, green peas and potatoes shaped into crisp pan-fried patties."},
+        {"name": "Gobi Pakora", "price": 10.50, "description": "Cauliflower fritters with gram flour, spices and herbs."},
+        {"name": "Dahi Kabab", "price": 9.00, "description": "Creamy yogurt patties with herbs, spices and flour, lightly pan fried."},
+        {"name": "Mushroom Delux", "price": 9.00, "description": "Mushrooms dipped in spicy gram flour batter and fried crisp. Six pieces per order."},
+        {"name": "Aloo Besan Tikki (2 pcs)", "price": 3.00, "description": "Crisp potato patties with peas, onions, gram flour and spices."},
+        {"name": "Shimla Mirch Pakora", "price": 5.00, "description": "Capsicum rings filled with spiced potato stuffing and fried in gram flour batter. Two pieces per order."},
+        {"name": "Aloo Finger", "price": 8.50, "description": "Golden brown crispy potato fingers."},
+        {"name": "Tawa Tikki (2 pcs)", "price": 4.00, "description": "Golden fried potato patties, crisp outside and soft inside."},
     ],
-    "seafood_mains": [
-        {"name": "Fish Curry", "price": 19},
-        {"name": "Fish Masala", "price": 20},
-        {"name": "Prawn Curry", "price": 21},
-        {"name": "Prawn Masala", "price": 22},
+    "bread_pakora": [
+        {"name": "Aloo Bread Pakora", "price": 3.00, "description": "Spiced potato stuffing between two slices of white bread. Two pieces per order."},
+        {"name": "Paneer Aloo Bread Pakora", "price": 5.00, "description": "Bread fritters with potato and paneer. Two pieces per order."},
+        {"name": "Bread Roll", "price": 3.00, "description": "Crispy outside with tangy savory potato stuffing. Two pieces per order."},
     ],
-    "vegetarian_mains": [
-        {"name": "Dal Makhani", "price": 16},
-        {"name": "Yellow Dal Tadka", "price": 15},
-        {"name": "Palak Paneer", "price": 17},
-        {"name": "Kadai Paneer", "price": 17},
-        {"name": "Shahi Paneer", "price": 17},
-        {"name": "Paneer Butter Masala", "price": 17},
-        {"name": "Malai Kofta", "price": 17},
-        {"name": "Baingan Bharta", "price": 16},
-        {"name": "Bhindi Masala", "price": 16},
-        {"name": "Rajma Masala", "price": 15},
-        {"name": "Chana Masala", "price": 15},
-        {"name": "Aloo Gobi", "price": 15},
-        {"name": "Mix Vegetable", "price": 15},
+    "burger_sandwich": [
+        {"name": "Aloo Tikki Burger", "price": 6.50, "description": "Spiced potato patty with lettuce, sliced onions and spicy mayo."},
+        {"name": "Noodle Burger", "price": 7.50, "description": "Spiced aloo patty with Asian-style noodles, cucumber, onion and signature mayo."},
+        {"name": "Paneer Tikki Burger", "price": 8.50, "description": "Spicy marinated paneer tikki with lettuce, onions and signature sauce."},
+        {"name": "Grilled Cheese Sandwich", "price": 5.50, "description": "Golden toasted bread with melted cheese."},
+        {"name": "Super Veggie Sandwich", "price": 6.99, "description": "Red onion, capsicum, carrots, sweet corn, shredded cheese, spicy mayo, seasoning and oregano."},
+        {"name": "Sweet Corn Sandwich", "price": 6.99, "description": "Sweet corn, shredded cheese, signature tangy sauce, seasoning and oregano."},
+        {"name": "Paneer Mayo Sandwich", "price": 7.99, "description": "Paneer cubes, shredded cheese, sweet corn, capsicum, carrot, onion, spicy mayo, seasoning and oregano."},
+        {"name": "Coleslaw Sandwich - Kids Size", "price": 5.00, "description": "White bread with eggless mayo, carrots, cabbage, black pepper and salt."},
+        {"name": "Triple Layer Sandwich Add On", "price": 1.00, "description": "Add-on for sandwiches."},
     ],
-    "bread": [
-        {"name": "Butter Naan", "price": 4},
-        {"name": "Garlic Naan", "price": 5},
-        {"name": "Roti", "price": 3},
-        {"name": "Paratha", "price": 5},
-        {"name": "Lachha Paratha", "price": 6},
-        {"name": "Aloo Paratha", "price": 7},
-        {"name": "Onion Kulcha", "price": 7},
-        {"name": "Amritsari Kulcha", "price": 8},
-        {"name": "Peshwari Naan", "price": 5},
-    ],
-    "rice": [
-        {"name": "Basmati Rice", "price": 4},
-        {"name": "Jeera Rice", "price": 6},
-        {"name": "Saffron Rice", "price": 7},
-        {"name": "Chicken Biryani", "price": 18},
-        {"name": "Lamb Biryani", "price": 20},
-        {"name": "Goat Biryani", "price": 20},
-        {"name": "Veg Biryani", "price": 16},
-    ],
-    "combos": [
-        {"name": "Butter Chicken Combo", "price": 22},
-        {"name": "Vegetarian Thali", "price": 20},
-        {"name": "Non-Vegetarian Thali", "price": 24},
-        {"name": "Chole Bhature", "price": 15},
-        {"name": "Rajma Rice Bowl", "price": 14},
-        {"name": "Dal Makhani Rice Bowl", "price": 15},
-    ],
-    "sides": [
-        {"name": "Raita", "price": 5},
-        {"name": "Plain Yogurt", "price": 4},
-        {"name": "Mango Chutney", "price": 3},
-        {"name": "Mixed Pickle", "price": 3},
-        {"name": "Green Salad", "price": 6},
-        {"name": "Papadum", "price": 3},
-    ],
-    "drinks": [
-        {"name": "Mango Lassi", "price": 6},
-        {"name": "Sweet Lassi", "price": 5},
-        {"name": "Salted Lassi", "price": 5},
-        {"name": "Masala Chai", "price": 4},
-        {"name": "Indian Coffee", "price": 4},
-        {"name": "Pop", "price": 3},
-        {"name": "Bottled Water", "price": 2},
+    "parantha": [
+        {"name": "Aloo Parantha", "price": 4.00, "description": "Flatbread stuffed with spiced mashed potatoes, served with mix pickle."},
+        {"name": "Gobi Parantha", "price": 4.50, "description": "Flatbread stuffed with spiced grated cauliflower, served with mix pickle."},
+        {"name": "Muli Parantha", "price": 4.50, "description": "Flatbread stuffed with spiced grated radish, served with mix pickle."},
+        {"name": "Paneer Parantha", "price": 4.99, "description": "Flatbread stuffed with spiced Indian cottage cheese, served with mix pickle."},
+        {"name": "Mix Parantha", "price": 4.99, "description": "Flatbread stuffed with potato, cauliflower, paneer and radish, served with mix pickle."},
     ],
     "desserts": [
-        {"name": "Gulab Jamun (2 pcs)", "price": 6},
-        {"name": "Kheer", "price": 6},
-        {"name": "Rasmalai (2 pcs)", "price": 7},
-        {"name": "Gajar Halwa", "price": 7},
-        {"name": "Kulfi", "price": 6},
+        {"name": "Rasmalai (2 pcs)", "price": 4.00, "description": "Soft cheese dumplings soaked in creamy cardamom-saffron milk."},
+        {"name": "Spongey Rasgulla (2 pcs)", "price": 3.00, "description": "Soft round dumplings in sugar syrup."},
+        {"name": "Garam Gulab Jamun (2 pcs)", "price": 3.00, "description": "Fried dough balls with almond inside, served in warm sugar syrup."},
+        {"name": "Moong Dal Halwa - 8 oz", "price": 5.50, "description": "Traditional dessert made from yellow moong dal, slow cooked with ghee, sugar and nuts."},
+        {"name": "Garam Gajrela - 8 oz", "price": 4.50, "description": "Fresh carrots cooked in milk with sugar, almonds, cashews, mawa and cardamom."},
+        {"name": "Kesar Rasmalai (6 pcs)", "price": 5.99, "description": "Paneer dumplings soaked in saffron milk."},
+    ],
+    "shake_faluda": [
+        {"name": "Mango Shake", "price": 5.50},
+        {"name": "Strawberry Shake", "price": 5.50},
+        {"name": "Oreo Shake", "price": 5.50},
+        {"name": "Chocolate Shake", "price": 5.50},
+        {"name": "Vanilla Shake", "price": 5.50},
+        {"name": "Mango Faluda", "price": 8.50},
+        {"name": "Strawberry Faluda", "price": 8.50},
+        {"name": "Vanilla Faluda", "price": 8.50},
+    ],
+    "beverages": [
+        {"name": "Masala Chai", "price": 1.99},
+        {"name": "Elachi Chai", "price": 2.99},
+        {"name": "Gur Chai", "price": 2.99},
+        {"name": "Dudh Patti", "price": 2.99},
+        {"name": "Coffee - Indian Style", "price": 2.99},
+        {"name": "Sweet Lassi", "price": 4.49},
+        {"name": "Salty Lassi", "price": 4.49},
+        {"name": "Mango Lassi", "price": 4.99},
+        {"name": "Badam Milk", "price": 5.99},
+    ],
+    "sides": [
+        {"name": "Butter (2 pcs)", "price": 0.99},
+        {"name": "Dahi - 8 oz", "price": 2.99},
+        {"name": "Raita - 8 oz", "price": 2.99},
+        {"name": "Extra Bhatura", "price": 2.50},
+        {"name": "Extra Puri", "price": 1.50},
+        {"name": "Choley - 8 oz", "price": 2.99},
+        {"name": "Mix Pickle - 2 oz", "price": 1.49},
+        {"name": "Tamarind Sauce - 2 oz", "price": 1.00},
+        {"name": "Mint Sauce - 2 oz", "price": 1.50},
     ],
 }
 
 MENU_CATEGORY_ALIASES = {
-    "main": "all_mains",
-    "mains": "all_mains",
-    "curry": "all_mains",
-    "curries": "all_mains",
-    "chicken": "chicken_mains",
-    "lamb": "lamb_goat_mains",
-    "goat": "lamb_goat_mains",
-    "fish": "seafood_mains",
-    "seafood": "seafood_mains",
-    "prawn": "seafood_mains",
-    "shrimp": "seafood_mains",
-    "veg": "vegetarian_mains",
-    "vegetarian": "vegetarian_mains",
-    "paneer": "vegetarian_mains",
-    "starter": "appetizers",
-    "starters": "appetizers",
-    "crispy": "appetizers",
-    "pakora": "appetizers",
-    "tandoori": "tandoori",
-    "grill": "tandoori",
-    "grilled": "tandoori",
-    "combo": "combos",
-    "combos": "combos",
-    "thali": "combos",
-    "meal": "combos",
-    "drink": "drinks",
-    "drinks": "drinks",
+    "starter": "all_snacks",
+    "starters": "all_snacks",
+    "snack": "all_snacks",
+    "snacks": "all_snacks",
+    "classic": "parkash_classic",
+    "parkash classic": "parkash_classic",
+    "chaat": "chaat",
+    "chat": "chaat",
+    "samosa": "samosa",
+    "samosas": "samosa",
+    "pakora": "pakora",
+    "pakoras": "pakora",
+    "crispy": "pakora",
+    "bread pakora": "bread_pakora",
+    "bread": "bread_pakora",
+    "burger": "burger_sandwich",
+    "burgers": "burger_sandwich",
+    "sandwich": "burger_sandwich",
+    "sandwiches": "burger_sandwich",
+    "parantha": "parantha",
+    "paratha": "parantha",
+    "parathas": "parantha",
+    "paranthas": "parantha",
+    "drink": "beverages",
+    "drinks": "beverages",
+    "beverage": "beverages",
+    "beverages": "beverages",
+    "chai": "beverages",
+    "tea": "beverages",
+    "lassi": "beverages",
+    "shake": "shake_faluda",
+    "shakes": "shake_faluda",
+    "faluda": "shake_faluda",
+    "falooda": "shake_faluda",
+    "sweet": "desserts",
+    "sweets": "desserts",
     "dessert": "desserts",
     "desserts": "desserts",
+    "side": "sides",
+    "sides": "sides",
 }
 
 ITEM_ALIASES = {
-    "chaap": "Tandoori Soya Chaap",
-    "chap": "Tandoori Soya Chaap",
-    "soya chaap": "Tandoori Soya Chaap",
-    "soya chap": "Tandoori Soya Chaap",
-    "soy chaap": "Tandoori Soya Chaap",
-    "soy chap": "Tandoori Soya Chaap",
-    "सोया चाप": "Tandoori Soya Chaap",
-    "चाप": "Tandoori Soya Chaap",
-    "चाप": "Tandoori Soya Chaap",
-    "fish": "Fish Pakora",
-    "fish pakora": "Fish Pakora",
-    "fish tikka": "Tandoori Fish Tikka",
-    "tandoori fish": "Tandoori Fish Tikka",
-    "tandoori fish tikka": "Tandoori Fish Tikka",
-    "chili chicken": "Chilli Chicken",
-    "chilli chicken": "Chilli Chicken",
-    "paneer tikka": "Paneer Tikka",
+    "aloo samosa": "Aloo Samosa (2 pcs)",
+    "regular samosa": "Aloo Samosa (2 pcs)",
+    "noodle samosa": "Noodle Samosa (2 pcs)",
+    "chole bhature": "Chole Bhatura",
+    "chole bhatura": "Chole Bhatura",
+    "choley bhatura": "Chole Bhatura",
+    "chole puri": "Choley Puri",
+    "choley puri": "Choley Puri",
+    "papdi chaat": "Chaat Papdi",
+    "papri chaat": "Chaat Papdi",
+    "samosa chaat": "Samosa Choley",
+    "samosa chole": "Samosa Choley",
+    "samosa choley": "Samosa Choley",
+    "tikki chaat": "Tawa Tikki Chaat",
+    "tikki choley": "Tawa Tikki Choley",
+    "tikki chole": "Tawa Tikki Choley",
+    "veggie sandwich": "Super Veggie Sandwich",
+    "mooli parantha": "Muli Parantha",
+    "muli paratha": "Muli Parantha",
+    "paneer paratha": "Paneer Parantha",
+    "aloo paratha": "Aloo Parantha",
+    "gobi paratha": "Gobi Parantha",
+    "mix paratha": "Mix Parantha",
+    "gulab jamun": "Garam Gulab Jamun (2 pcs)",
+    "gajrela": "Garam Gajrela - 8 oz",
+    "gajar halwa": "Garam Gajrela - 8 oz",
+    "rasgulla": "Spongey Rasgulla (2 pcs)",
+    "falooda": "Mango Faluda",
 }
 
 BUSINESS_INFO = """
-Restaurant Name: Bizbull Restaurant
-Cuisine: Punjabi Indian
-Location: Canada
+Restaurant Name: Parkash Sweets
+Cuisine: Punjabi Indian vegetarian sweets, snacks, chaat, pakora, paranthas, burgers, sandwiches, desserts and beverages
+Locations shown on menu: Kapurthala and Edmonton
 Hours: Monday to Sunday, 11 AM to 10 PM
 Phone: (Ask owner to fill in)
 Accepts: Cash and all major credit cards
-Delivery: Available via DoorDash and Uber Eats
-Minimum order for delivery: $30
+Orders: dine-in, pickup, and delivery if available for the caller's location
 All prices are in Canadian dollars (CAD).
 """
 
 
 def get_system_message(language: str) -> str:
     return f"""
-You are a real person named Sierra working at {RESTAURANT_NAME}, a Punjabi Indian restaurant in Canada.
+You are a real person named Sierra working at {RESTAURANT_NAME}, a Punjabi Indian sweets and snacks restaurant in Canada.
 You answer the phone and take food orders. You are warm, helpful, and natural — not robotic.
 
 VOICE RULES (very important):
@@ -215,16 +219,16 @@ VOICE RULES (very important):
 - Never repeat the customer's full order back word for word until final confirmation.
 - Never mention item prices during normal ordering, menu recommendations, or order recap unless the customer specifically asks for prices.
 - When confirming the order, mention item names only. Do not mention individual prices.
-- Only say the total amount when the customer asks for the total, or at the final "go ahead and place that?" confirmation.
+- Never say the total amount unless the customer specifically asks for the total or price.
 - Speak conversationally — short, warm, natural.
 - Customer names, phone numbers, order totals, and prices are always spoken in English, even when the rest of the call is Punjabi or Hindi.
 - Phone numbers must always be read digit by digit in English words or English digits. Never translate digits into Hindi or Punjabi.
 - Names must always be repeated or spelled using English letters only, for example "H-A-R-P-R-E-E-T".
-- Prices and totals must always be said in English, for example "eighteen dollars" or "the total is thirty two dollars", never translated into Hindi or Punjabi.
+- If the customer asks for a price or total, say it in English, for example "eighteen dollars" or "the total is thirty two dollars", never translated into Hindi or Punjabi.
 - If the customer corrects their name or phone number, always repeat the corrected value back and ask for confirmation before continuing.
 
 HOW TO HANDLE THE CALL:
-1. Greet warmly: "Hi! This is Sierra calling from Bizbull Restaurant. Would you like to continue in English, Hindi, or Punjabi?"
+1. Greet warmly: "Hi! This is Sierra calling from Parkaash Sweets. Would you like to continue in English, Hindi, or Punjabi?" Use "Parkaash" for pronunciation when speaking the name, but keep the official written name as Parkash Sweets.
 2. The moment the customer replies with their language — call `select_language` IMMEDIATELY (before saying anything else). This switches the voice to match their language.
 3. Then greet them in their chosen language and ask dine-in, pickup, or delivery.
 4. Help them order — use get_menu only when they ask what's available, ask about a specific dish, or ask for prices. If the tool returns prices, do not speak those prices unless the customer asked.
@@ -235,7 +239,7 @@ HOW TO HANDLE THE CALL:
    d. If the customer corrects the name, repeat the corrected name back in English letters and ask again if it is correct. Do not move to phone number until the customer confirms the name.
    e. Phone number — ask for their phone number only after the name is confirmed. Then read it back digit by digit in English, even if the rest of the call is in Punjabi or Hindi. Example: "That's nine four one, three seven five, two six eight eight — is that right?" Wait for confirmation before continuing.
    f. If the customer corrects the phone number, repeat the corrected full phone number digit by digit in English and ask again if it is right. Do not move on until the customer confirms the phone number.
-   g. Briefly confirm the order items. Say the total amount in English only at this final confirmation step, then ask: "Shall I go ahead and place that?"
+   g. Briefly confirm the order items without saying prices or total. Then ask: "Shall I go ahead and place that?"
 6. Once confirmed, place the order with place_order.
 7. Tell them the estimated wait time and say goodbye warmly.
 
@@ -253,22 +257,22 @@ When transferring:
 - Do not apologize, do not explain why.
 
 UPSELLING (like a good waiter — subtle, natural, maximum once or twice per call):
-- When someone orders a main dish with no bread → casually mention "Garlic naan goes really well with that, want to add one?"
-- When someone hasn't ordered drinks → near the end, "Can I get you a mango lassi or anything to drink?"
-- When someone orders for multiple people → "Would anyone want dessert? Our gulab jamun is really popular."
+- When someone orders chaat or pakora with no drink → casually mention "Mango lassi goes really well with that, want to add one?"
+- When someone orders only snacks → near the end, "Would you like to add chai or lassi with that?"
+- When someone orders for multiple people → "Would anyone want sweets? Our rasmalai and gulab jamun are popular."
 - NEVER upsell more than twice per call. If they say no, drop it immediately and move on.
 - Make it sound like a genuine suggestion, not a sales pitch. One short sentence, then wait.
 - Never upsell if the customer seems in a hurry or annoyed.
 
 MENU RECOMMENDATION RULES:
 - Never read the full menu unless the customer asks for the full menu. Offer 2-4 relevant choices at a time.
-- If the customer asks for starters or something crispy, mention Fish Pakora, Paneer Pakora, or Samosa.
-- If the customer orders curry without bread or rice, suggest garlic naan, basmati rice, or jeera rice.
-- If the customer orders tandoori or grilled items, suggest raita, green salad, or mango chutney.
-- If the customer wants a full meal, suggest Vegetarian Thali, Non-Vegetarian Thali, or Butter Chicken Combo.
-- If the customer asks for popular Punjabi dishes, mention Butter Chicken, Dal Makhani, Amritsari Kulcha, Chole Bhature, or Fish Pakora.
-- Near the end, if they have no drink, ask once about mango lassi, sweet lassi, or masala chai.
-- For dessert, suggest gulab jamun, rasmalai, gajar halwa, or kulfi only once.
+- If the customer asks for snacks or something crispy, mention Aloo Samosa, Paneer Pakora, Mix Veg Pakora, or Bread Roll.
+- If the customer asks for chaat, mention Chaat Papdi, Samosa Choley, Dahi Bhalla, or Tawa Tikki Chaat.
+- If the customer wants a filling meal, suggest Chole Bhatura, Choley Puri, Aloo Puri, or a stuffed parantha.
+- If the customer asks for burgers or sandwiches, mention Aloo Tikki Burger, Noodle Burger, Paneer Tikki Burger, or Super Veggie Sandwich.
+- If the customer asks for popular Parkash items, mention Chole Bhatura, Aloo Samosa, Chaat Papdi, Paneer Pakora, Rasmalai, and Mango Lassi.
+- Near the end, if they have no drink, ask once about mango lassi, sweet lassi, masala chai, or badam milk.
+- For dessert or sweets, suggest rasmalai, garam gulab jamun, moong dal halwa, gajrela, or rasgulla only once.
 
 LANGUAGE:
 - Always open the call in English with the language selection question.
@@ -362,38 +366,42 @@ get_menu_tool_description = ChatCompletionFunctionToolParam(
                     "description": "Menu category to fetch. Use 'all' for the full menu.",
                     "enum": [
                         "all",
-                        "mains",
-                        "main",
-                        "appetizers",
+                        "all_snacks",
+                        "snacks",
+                        "snack",
+                        "samosa",
+                        "parkash_classic",
+                        "classic",
+                        "chaat",
+                        "chat",
+                        "pakora",
                         "starter",
                         "starters",
-                        "tandoori",
-                        "grill",
-                        "grilled",
-                        "chaap",
-                        "chicken_mains",
-                        "chicken",
-                        "lamb_goat_mains",
-                        "lamb",
-                        "goat",
-                        "seafood_mains",
-                        "seafood",
-                        "fish",
-                        "prawn",
-                        "vegetarian_mains",
-                        "vegetarian",
-                        "veg",
-                        "paneer",
+                        "crispy",
+                        "bread_pakora",
+                        "bread pakora",
                         "bread",
-                        "rice",
-                        "combos",
-                        "combo",
-                        "thali",
-                        "sides",
-                        "drinks",
-                        "drink",
+                        "burger_sandwich",
+                        "burger",
+                        "sandwich",
+                        "parantha",
+                        "paratha",
                         "desserts",
                         "dessert",
+                        "sweets",
+                        "sweet",
+                        "shake_faluda",
+                        "shake",
+                        "faluda",
+                        "falooda",
+                        "beverages",
+                        "beverage",
+                        "drinks",
+                        "drink",
+                        "chai",
+                        "lassi",
+                        "sides",
+                        "side",
                     ],
                 },
             },
@@ -410,14 +418,15 @@ async def get_menu(category: str) -> dict:
     if category == "all":
         return {"menu": MENU, "info": BUSINESS_INFO}
 
-    if category == "all_mains":
-        mains = (
-            MENU["chicken_mains"]
-            + MENU["lamb_goat_mains"]
-            + MENU["seafood_mains"]
-            + MENU["vegetarian_mains"]
+    if category == "all_snacks":
+        snacks = (
+            MENU["samosa"]
+            + MENU["chaat"]
+            + MENU["pakora"]
+            + MENU["bread_pakora"]
+            + MENU["burger_sandwich"]
         )
-        return {"category": category, "items": mains}
+        return {"category": category, "items": snacks}
 
     if category in MENU:
         return {"category": category, "items": MENU[category]}
@@ -450,7 +459,7 @@ async def check_item_availability(item_name: str) -> dict:
     print(f"Running Tool: check_item_availability(item_name='{item_name}')")
 
     category = normalize_menu_category(item_name)
-    if category in MENU or category == "all_mains":
+    if category in MENU or category == "all_snacks":
         menu_result = await get_menu(category)
         return {
             "available": bool(menu_result.get("items") or menu_result.get("menu")),
@@ -492,7 +501,11 @@ place_order_tool_description = ChatCompletionFunctionToolParam(
     type="function",
     function={
         "name": "place_order",
-        "description": "Place the final order after the customer has confirmed all items and the total.",
+        "description": (
+            "Place the final order after the customer has confirmed all items. "
+            "The total_amount is for internal order records only; do not speak the "
+            "total or item prices unless the customer specifically asked for prices."
+        ),
         "parameters": {
             "type": "object",
             "properties": {
@@ -561,7 +574,7 @@ async def place_order(
     # TODO: Save to Supabase database
     # TODO: Send WhatsApp notification to restaurant owner
 
-    order_id = f"BB-{datetime.now().strftime('%H%M%S')}"
+    order_id = f"PS-{datetime.now().strftime('%H%M%S')}"
 
     wait_time = "20-30 minutes" if order_type == "pickup" else "40-60 minutes" if order_type == "delivery" else "10-15 minutes"
 

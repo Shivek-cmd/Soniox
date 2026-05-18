@@ -21,6 +21,7 @@ from processors.tts import TTSProcessor
 from processors.vad import VADProcessor
 from session import Session
 from tools import (
+    LANGUAGE_CONFIG,
     RestaurantState,
     get_system_message,
     get_tools,
@@ -49,31 +50,28 @@ STT_CONTEXT = {
         {"key": "topic", "value": "food ordering"},
     ],
     "terms": [
-        "Bizbull Restaurant", "Samosa", "Paneer Pakora", "Veg Pakora",
-        "Fish Pakora", "Chicken Pakora", "Aloo Tikki", "Papdi Chaat",
-        "Dahi Bhalla", "Amritsari Kulcha Chole", "Tandoori Chicken",
-        "Chicken Tikka", "Malai Chicken Tikka", "Seekh Kebab",
-        "Tandoori Fish Tikka", "Paneer Tikka", "Tandoori Soya Chaap",
-        "Butter Chicken", "Chicken Tikka Masala", "Saag Chicken",
-        "Chicken Curry", "Kadai Chicken", "Chicken Vindaloo",
-        "Chicken Korma", "Chilli Chicken", "Lamb Curry", "Lamb Vindaloo",
-        "Lamb Korma", "Goat Curry", "Goat Masala", "Saag Goat",
-        "Fish Curry", "Fish Masala", "Prawn Curry", "Prawn Masala",
-        "Dal Makhani", "Yellow Dal Tadka", "Palak Paneer", "Kadai Paneer",
-        "Shahi Paneer", "Paneer Butter Masala", "Malai Kofta",
-        "Baingan Bharta", "Bhindi Masala", "Rajma Masala", "Chana Masala",
-        "Aloo Gobi", "Mix Vegetable", "Butter Naan", "Garlic Naan",
-        "Roti", "Paratha", "Lachha Paratha", "Aloo Paratha",
-        "Onion Kulcha", "Amritsari Kulcha", "Peshwari Naan",
-        "Basmati Rice", "Jeera Rice", "Saffron Rice", "Chicken Biryani",
-        "Lamb Biryani", "Goat Biryani", "Veg Biryani",
-        "Butter Chicken Combo", "Vegetarian Thali", "Non-Vegetarian Thali",
-        "Chole Bhature", "Rajma Rice Bowl", "Dal Makhani Rice Bowl",
-        "Raita", "Mango Chutney", "Mixed Pickle", "Green Salad",
-        "Papadum", "Mango Lassi", "Sweet Lassi", "Salted Lassi",
-        "Masala Chai", "Indian Coffee", "Gulab Jamun", "Kheer",
-        "Rasmalai", "Gajar Halwa", "Kulfi", "dine-in", "pickup",
-        "delivery",
+        "Parkash Sweets", "Aloo Samosa", "Noodle Samosa",
+        "Chole Bhatura", "Choley Puri", "Aloo Puri", "Chaat Papdi",
+        "Dahi Bhalla", "Samosa Choley", "Tawa Tikki Chaat",
+        "Tawa Tikki Choley", "Aloo Besan Tikki Chaat", "Mix Veg Pakora",
+        "Baingan Pakora", "Spring Roll", "Aloo Cutlet", "Parkash Platter",
+        "Paneer Pakora", "Mirchi Pakora", "Hara Bara Kabab", "Gobi Pakora",
+        "Dahi Kabab", "Mushroom Delux", "Aloo Besan Tikki",
+        "Shimla Mirch Pakora", "Aloo Finger", "Tawa Tikki",
+        "Aloo Bread Pakora", "Paneer Aloo Bread Pakora", "Bread Roll",
+        "Aloo Tikki Burger", "Noodle Burger", "Paneer Tikki Burger",
+        "Grilled Cheese Sandwich", "Super Veggie Sandwich",
+        "Sweet Corn Sandwich", "Paneer Mayo Sandwich", "Coleslaw Sandwich",
+        "Aloo Parantha", "Gobi Parantha", "Muli Parantha",
+        "Paneer Parantha", "Mix Parantha", "Rasmalai", "Spongey Rasgulla",
+        "Garam Gulab Jamun", "Moong Dal Halwa", "Garam Gajrela",
+        "Kesar Rasmalai", "Mango Shake", "Strawberry Shake", "Oreo Shake",
+        "Chocolate Shake", "Vanilla Shake", "Mango Faluda",
+        "Strawberry Faluda", "Vanilla Faluda", "Masala Chai", "Elachi Chai",
+        "Gur Chai", "Dudh Patti", "Coffee Indian Style", "Sweet Lassi",
+        "Salty Lassi", "Mango Lassi", "Badam Milk", "Butter", "Dahi",
+        "Raita", "Extra Bhatura", "Extra Puri", "Choley", "Mix Pickle",
+        "Tamarind Sauce", "Mint Sauce", "dine-in", "pickup", "delivery",
     ],
 }
 
@@ -116,6 +114,7 @@ class QueryParams(pydantic.BaseModel):
     audio_in_num_channels: int = 1
     audio_out_format: str = "pcm_s16le"
     audio_out_sample_rate: int = 24000
+    skip_opening_greeting: bool = False
 
     @pydantic.model_validator(mode="before")
     @classmethod
@@ -164,6 +163,11 @@ async def handle(websocket: ServerConnection):
 
     state = RestaurantState()
 
+    def select_language_without_llm(language: str):
+        config = LANGUAGE_CONFIG.get(language.lower(), LANGUAGE_CONFIG["english"])
+        state.tts_language = config["tts_language"]
+        state.tts_voice = config["tts_voice"]
+
     processors: List[MessageProcessor] = [
         VADProcessor(
             sample_rate=params.audio_in_sample_rate,
@@ -184,6 +188,8 @@ async def handle(websocket: ServerConnection):
             tools=get_tools(state),
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
+            on_language_selected=select_language_without_llm,
+            send_opening_greeting=not params.skip_opening_greeting,
         ),
         DynamicTTSProcessor(
             state=state,

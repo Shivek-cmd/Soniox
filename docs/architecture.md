@@ -204,11 +204,11 @@ Purpose:
 - Uses restaurant vocabulary context from `STT_CONTEXT`
 - Produces transcription messages for the LLM
 
-Current speech context includes restaurant terms such as:
+Current speech context includes Parkash Sweets menu terms such as:
 
 ```text
-Butter Chicken, Chicken Tikka Masala, Dal Makhani, Garlic Naan,
-Basmati Rice, Mango Lassi, pickup, delivery
+Aloo Samosa, Chole Bhatura, Chaat Papdi, Paneer Pakora,
+Rasmalai, Mango Lassi, pickup, delivery
 ```
 
 Current language hints:
@@ -241,7 +241,7 @@ The LLM owns the conversation brain after the opening greeting: language selecti
 Current opening greeting:
 
 ```text
-Hi! This is Sierra calling from Bizbull Restaurant. Would you like to continue in English, Hindi, or Punjabi?
+Hi! This is Sierra calling from Parkaash Sweets. Would you like to continue in English, Hindi, or Punjabi?
 ```
 
 ### 4. `DynamicTTSProcessor`

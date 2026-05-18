@@ -44,6 +44,22 @@ python main.py
 Uvicorn running on http://0.0.0.0:5050
 ```
 
+### Optional — generate cached opening greeting
+
+Run this once when you want Twilio to play the first greeting faster from a local WAV file:
+
+```powershell
+cd "D:\Chrishan Solution\Soniox\soniox_examples\apps\soniox-voice-bot-demo\twilio"
+$env:SONIOX_API_KEY="your_soniox_key"
+python generate_opening_greeting.py
+```
+
+Then set this in `twilio/.env`:
+
+```env
+OPENING_GREETING_AUDIO_PATH=assets/opening_greeting.wav
+```
+
 ---
 
 ## Terminal 4 — ngrok Tunnel (phone calls only)

@@ -29,7 +29,7 @@ from messages import (
 from processors.message_processor import MessageProcessor
 
 OPENING_GREETING = (
-    "Hi! This is Sierra calling from Bizbull Restaurant. "
+    "Hi! This is Sierra calling from Parkaash Sweets. "
     "Would you like to continue in English, Hindi, or Punjabi?"
 )
 
@@ -52,6 +52,37 @@ LANGUAGE_SELECTION_TERMS = {
     "ਪੰਜਾਬੀ",   # Gurmukhi
     "ਪੰਜابی",
     "पंजाबी",   # Devanagari — STT sometimes outputs this for "Punjabi"
+}
+
+LANGUAGE_SELECTION_PATTERNS = {
+    "english": [
+        "english",
+        "angrezi",
+        "inglish",
+        "अंग्रेजी",
+        "इंग्लिश",
+        "ਅੰਗਰੇਜ਼ੀ",
+        "ਇੰਗਲਿਸ਼",
+    ],
+    "hindi": [
+        "hindi",
+        "हिंदी",
+        "हिन्दी",
+        "ਹਿੰਦੀ",
+    ],
+    "punjabi": [
+        "punjabi",
+        "panjabi",
+        "ਪੰਜਾਬੀ",
+        "ਪੰਜابی",
+        "पंजाबी",
+    ],
+}
+
+LANGUAGE_SELECTED_RESPONSES = {
+    "english": "Of course! Is this for pickup, delivery, or dine-in?",
+    "hindi": "बिलकुल! यह pickup, delivery, या dine-in के लिए है?",
+    "punjabi": "ਬਿਲਕੁਲ ji! ਇਹ pickup, delivery, ਜਾਂ dine-in ਲਈ ਹੈ?",
 }
 
 
@@ -94,6 +125,8 @@ class LLMProcessor(MessageProcessor):
         ] = [],
         temperature: float = 0.85,
         max_tokens: int = 120,
+        on_language_selected: Callable[[str], None] | None = None,
+        send_opening_greeting: bool = True,
     ):
         """Initialize the LLM processor.
 
@@ -108,6 +141,8 @@ class LLMProcessor(MessageProcessor):
         self._model = model
         self._temperature = temperature
         self._max_tokens = max_tokens
+        self._on_language_selected = on_language_selected
+        self._send_opening_greeting_enabled = send_opening_greeting
 
         # Prepare tools for LLM
         self._tool_descriptions = []
@@ -140,7 +175,10 @@ class LLMProcessor(MessageProcessor):
             self._append_user_message(message)
         elif isinstance(message, SessionStartMessage):
             self.log.debug("Session start message")
-            await self._send_opening_greeting()
+            if self._send_opening_greeting_enabled:
+                await self._send_opening_greeting()
+            else:
+                self._record_opening_greeting()
 
         elif isinstance(message, TranscriptionEndpointMessage):
             self.log.debug("Transcription endpoint message")
@@ -149,10 +187,12 @@ class LLMProcessor(MessageProcessor):
                 if not self._has_latest_user_message():
                     return
 
-                if not self._latest_user_message_selects_language():
+                language = self._latest_user_message_language_selection()
+                if not language:
                     await self._send_language_prompt()
                     return
-                self._awaiting_language_selection = False
+                await self._handle_language_selection(language)
+                return
 
             # Start LLM generation as a background task
             self._active_task = asyncio.create_task(self._generate_llm_response())
@@ -229,6 +269,11 @@ class LLMProcessor(MessageProcessor):
         self._remember_assistant_text(OPENING_GREETING)
         await self._send_message(LLMFullMessage(OPENING_GREETING))
 
+    def _record_opening_greeting(self):
+        message = LLMChunkMessage(OPENING_GREETING)
+        self._append_llm_message(message)
+        self._remember_assistant_text(OPENING_GREETING)
+
     async def _send_language_prompt(self):
         message = LLMChunkMessage(LANGUAGE_PROMPT)
         await self._send_message(message)
@@ -268,15 +313,41 @@ class LLMProcessor(MessageProcessor):
         return False
 
     def _latest_user_message_selects_language(self):
+        return self._latest_user_message_language_selection() is not None
+
+    def _latest_user_message_language_selection(self):
         if not self._has_latest_user_message():
-            return False
+            return None
 
         content = self._messages[-1].get("content", "")
         if not isinstance(content, str):
-            return False
+            return None
 
-        normalized = content.casefold()
-        return any(term in normalized for term in LANGUAGE_SELECTION_TERMS)
+        return self._detect_language_selection(content)
+
+    def _detect_language_selection(self, text: str):
+        normalized = text.casefold()
+        if not normalized.strip():
+            return None
+
+        for language, patterns in LANGUAGE_SELECTION_PATTERNS.items():
+            if any(pattern.casefold() in normalized for pattern in patterns):
+                return language
+
+        return None
+
+    async def _handle_language_selection(self, language: str):
+        self._awaiting_language_selection = False
+
+        if self._on_language_selected:
+            self._on_language_selected(language)
+
+        response_text = LANGUAGE_SELECTED_RESPONSES[language]
+        message = LLMChunkMessage(response_text)
+        await self._send_message(message)
+        self._append_llm_message(message)
+        self._remember_assistant_text(response_text)
+        await self._send_message(LLMFullMessage(response_text))
 
     def _has_latest_user_message(self):
         return bool(self._messages and self._messages[-1]["role"] == "user")
