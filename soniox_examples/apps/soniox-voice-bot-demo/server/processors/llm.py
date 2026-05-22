@@ -155,6 +155,7 @@ class LLMProcessor(MessageProcessor):
 
         self._active_task: asyncio.Task | None = None
         self._awaiting_language_selection = True
+        self._user_speech_started = False
         self._recent_assistant_texts: list[str] = []
         self._messages: list[ChatCompletionMessageParam] = [
             ChatCompletionSystemMessageParam(
@@ -173,6 +174,13 @@ class LLMProcessor(MessageProcessor):
     async def process(self, message):
         if isinstance(message, TranscriptionMessage):
             self._append_user_message(message)
+            # Early language detection: fire on partial (non-final) results so we
+            # don't wait 2-3 seconds for Soniox's silence-based endpoint detection.
+            # Only after VAD confirmed the user is speaking to avoid echo false-positives.
+            if self._awaiting_language_selection and self._user_speech_started:
+                language = self._detect_language_selection(message.text())
+                if language:
+                    await self._handle_language_selection(language)
         elif isinstance(message, SessionStartMessage):
             self.log.debug("Session start message")
             if self._send_opening_greeting_enabled:
@@ -199,6 +207,7 @@ class LLMProcessor(MessageProcessor):
 
         elif isinstance(message, UserSpeechStartMessage):
             self.log.debug("User speech start detected - cancelling LLM generation")
+            self._user_speech_started = True
             if self._active_task and not self._active_task.done():
                 self._active_task.cancel()
 

@@ -237,7 +237,9 @@ async def handle_media_stream(websocket: WebSocket):
             if not opening_greeting_ulaw or not stream_sid:
                 return
 
-            chunk_size = 160  # 20ms at 8kHz mulaw.
+            # Send in large chunks — Twilio buffers and plays at correct rate.
+            # No sleep needed; asyncio.sleep jitter causes buffer underruns and choppy audio.
+            chunk_size = 3200  # 400ms of audio per send, reduces WebSocket overhead.
             print("Sending cached opening greeting to Twilio.")
             mark_queue.append("cachedOpeningGreeting")
             try:
@@ -252,7 +254,6 @@ async def handle_media_stream(websocket: WebSocket):
                         "streamSid": stream_sid,
                         "media": {"payload": audio_payload},
                     })
-                    await asyncio.sleep(0.02)
             except asyncio.CancelledError:
                 print("Cached opening greeting cancelled by caller speech.")
                 return
