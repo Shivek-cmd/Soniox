@@ -1,6 +1,9 @@
+import os
 from datetime import datetime
 
+import httpx
 from openai.types.chat import ChatCompletionFunctionToolParam
+
 
 RESTAURANT_NAME = "Parkash Sweets"
 SPOKEN_RESTAURANT_NAME = "Prakaash Sweets"
@@ -228,6 +231,10 @@ LANGUAGE RULES (always follow these):
 - After placing an order in Punjabi: "ਤੁਹਾਡਾ order confirmed ਹੈ. Wait time 20-30 minutes ਹੈ. Thank you."
 - After placing an order in Hindi: "आपका order confirmed है. Wait time 20-30 minutes है. Thank you."
 - Ask about special requests like this — always in this form, never translated: "Koi special instructions ya allergy?" (Hindi/Punjabi calls) or "Any special instructions or allergies?" (English calls).
+
+PUNJABI/HINDI NUMBERS — always interpret these correctly when a customer states a quantity:
+ਇੱਕ/ek=1, ਦੋ/do=2, ਤਿੰਨ/teen=3, ਚਾਰ/char=4, ਪੰਜ/paanch=5, ਛੇ/chhe=6, ਸੱਤ/saat=7, ਅੱਠ/aath=8, ਨੌਂ/nau=9, ਦਸ/das=10.
+When recapping the order, always group by item with the correct quantity: "2 Chole Bhatura and 4 Mango Lassi" — never list each piece separately.
 
 HOW A CALL FLOWS:
 Open in English and ask which language they prefer. The moment they reply — call `select_language` immediately, then respond in that language. Help them order naturally: find out what they're in the mood for, answer menu questions, take the order. Don't ask about dine-in, pickup, or delivery until they start ordering. When they seem done, ask once about special instructions or allergies (if they haven't already mentioned any), then get their first name (confirm the spelling in English letters), then their phone number (confirm digit by digit in English). Give a quick recap — item names only — and ask if they're ready to place it. Once confirmed, call `place_order`, say "order confirmed" and the wait time, then a warm goodbye.
@@ -527,6 +534,16 @@ place_order_tool_description = ChatCompletionFunctionToolParam(
 )
 
 
+def _lookup_price(item_name: str) -> float:
+    """Look up the menu price for an item by name (case-insensitive)."""
+    name_lower = item_name.strip().lower()
+    for category_items in MENU.values():
+        for item in category_items:
+            if item["name"].lower() == name_lower:
+                return item["price"]
+    return 0.0
+
+
 async def place_order(
     customer_name: str,
     phone_number: str,
@@ -544,12 +561,36 @@ async def place_order(
         f"items={[i['name'] for i in items]})"
     )
 
-    # TODO: Save to Supabase database
-    # TODO: Send WhatsApp notification to restaurant owner
+    # Fill in any missing prices from the menu and recalculate total.
+    # The LLM doesn't know prices during ordering, so it often passes 0.
+    for item in items:
+        if not item.get("price"):
+            item["price"] = _lookup_price(item["name"])
+    total_amount = sum(item["price"] * item.get("quantity", 1) for item in items)
 
     order_id = f"PS-{datetime.now().strftime('%H%M%S')}"
 
     wait_time = "20-30 minutes" if order_type == "pickup" else "40-60 minutes" if order_type == "delivery" else "10-15 minutes"
+
+    n8n_url = os.getenv("N8N_WEBHOOK_URL", "")
+    if n8n_url:
+        payload = {
+            "order_id": order_id,
+            "customer_name": customer_name,
+            "phone_number": phone_number,
+            "order_type": order_type,
+            "items": items,
+            "total_amount": total_amount,
+            "wait_time": wait_time,
+            "delivery_address": delivery_address,
+            "special_instructions": special_instructions,
+            "timestamp": datetime.now().isoformat(),
+        }
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                await client.post(n8n_url, json=payload)
+        except Exception as e:
+            print(f"n8n webhook failed (order still confirmed): {e}")
 
     return {
         "success": True,
