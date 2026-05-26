@@ -20,7 +20,16 @@
       "PowerShell(npm --version)",
       "PowerShell(pip --version)",
       "Skill(update-config)",
-      "Skill(update-config:*)"
+      "Skill(update-config:*)",
+      "WebFetch(domain:marketplace.gohighlevel.com)",
+      "WebFetch(domain:highlevel.stoplight.io)",
+      "WebFetch(domain:public-api.gohighlevel.com)",
+      "WebSearch",
+      "WebFetch(domain:help.gohighlevel.com)",
+      "WebFetch(domain:community.n8n.io)",
+      "WebFetch(domain:consultevo.com)",
+      "WebFetch(domain:n8n.io)",
+      "WebFetch(domain:community.make.com)"
     ],
     "additionalDirectories": [
       "C:\\Users\\shive\\.claude"

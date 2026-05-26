@@ -1,0 +1,340 @@
+{
+  "name": "Parkash Sweets — Voice Order to GHL",
+  "nodes": [
+    {
+      "id": "sticky-01",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [240, 80],
+      "parameters": {
+        "width": 620,
+        "height": 180,
+        "content": "## Parkash Sweets — Voice Order to GHL\n\nTriggered by: `place_order` in the voice agent (`server/tools.py`)\nWebhook path: `/webhook/parkash-sweets-order`\n\n**Flow:** Webhook → Format Data → Upsert GHL Contact → IF success → Create Note + Send SMS\n\n**Credentials required:** GHL PIT token is hardcoded. Replace `YOUR_GHL_PIT_TOKEN` with the real token if rotating.\n**Location ID:** `17GczvGNGevvP7fAihax` (Parkash Sweets)"
+      }
+    },
+    {
+      "id": "webhook-01",
+      "name": "Voice Agent Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 320],
+      "webhookId": "4a3f8c2d-1b5e-4f7a-9c8d-0e2f1a3b5c7e",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "parkash-sweets-order",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "code-01",
+      "name": "Format Order Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 320],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// ─── Helpers ────────────────────────────────────────────────\nfunction normalizePhone(raw) {\n  if (!raw) return '';\n  const d = String(raw).replace(/\\D/g, '');\n  if (d.length === 10) return '+1' + d;                          // 6471234567  → +16471234567\n  if (d.length === 11 && d[0] === '1') return '+' + d;           // 16471234567 → +16471234567\n  if (d.length > 6) return '+' + d;                              // international\n  return '+1' + d;                                               // fallback\n}\n\nfunction parseName(name) {\n  const parts = (name || 'Customer').trim().split(/\\s+/);\n  return { first: parts[0] || 'Customer', last: parts.slice(1).join(' ') || '' };\n}\n\nfunction itemsToNote(items) {\n  if (!Array.isArray(items) || !items.length) return '  (no items recorded)';\n  return items\n    .map(i => '  ' + (i.quantity || 1) + 'x ' + i.name + ' — $' + parseFloat(i.price || 0).toFixed(2))\n    .join('\\n');\n}\n\nfunction itemsShort(items) {\n  if (!Array.isArray(items) || !items.length) return 'your order';\n  return items.map(i => (i.quantity || 1) + 'x ' + i.name).join(', ');\n}\n\nfunction fmtTime(iso) {\n  try {\n    return new Date(iso).toLocaleString('en-CA', {\n      timeZone: 'America/Toronto',\n      dateStyle: 'medium',\n      timeStyle: 'short'\n    });\n  } catch (e) {\n    return String(iso || new Date().toISOString());\n  }\n}\n\n// ─── Parse incoming payload ──────────────────────────────────\n// n8n wraps the body under .body when responseMode is onReceived\nconst b = $input.first().json.body ?? $input.first().json;\n\nconst phone    = normalizePhone(b.phone_number);\nconst name     = parseName(b.customer_name);\nconst oType    = b.order_type || 'pickup';\nconst oLabel   = oType.replace(/_/g, '-').toUpperCase();  // PICKUP / DELIVERY / DINE-IN\nconst total    = parseFloat(b.total_amount || 0).toFixed(2);\nconst orderId  = b.order_id || 'PS-UNKNOWN';\nconst waitTime = b.wait_time || '20-30 minutes';\nconst items    = b.items || [];\n\n// ─── Build GHL contact note ──────────────────────────────────\nconst sep = '─'.repeat(34);\nlet noteLines = [\n  '\\uD83D\\uDCDE VOICE ORDER \\u2014 ' + orderId,\n  sep,\n  'Date:  ' + fmtTime(b.timestamp),\n  'Type:  ' + oLabel,\n  '',\n  'ITEMS:',\n  itemsToNote(items),\n  '',\n  'TOTAL: $' + total + ' CAD',\n  'WAIT:  ' + waitTime\n];\nif (b.delivery_address)     noteLines.push('', 'DELIVER TO: ' + b.delivery_address);\nif (b.special_instructions) noteLines.push('', 'SPECIAL: '   + b.special_instructions);\nnoteLines.push(sep, 'via Parkash Sweets Voice Agent (Sierra)');\n\n// ─── Build SMS message ───────────────────────────────────────\nconst orderTypeFriendly = oType === 'dine_in' ? 'dine-in' : oType;\nconst smsText =\n  'Hi ' + name.first + '! Your Parkash Sweets order is confirmed \\u2713\\n\\n' +\n  itemsShort(items) + '\\n\\n' +\n  'Ready for ' + orderTypeFriendly + ' in ' + waitTime + '.\\n' +\n  'Order #' + orderId + '\\n\\nThank you! \\uD83D\\uDE4F';\n\n// ─── Contact body for GHL upsert ─────────────────────────────\nconst contactBody = {\n  locationId: '17GczvGNGevvP7fAihax',\n  firstName:  name.first,\n  lastName:   name.last,\n  phone:      phone,\n  source:     'Voice Agent \\u2014 Parkash Sweets',\n  tags:       ['parkash-customer', oType.replace(/_/g, '-')]\n};\n\nreturn [{\n  json: {\n    orderId,\n    phone,\n    firstName:   name.first,\n    orderType:   oType,\n    noteText:    noteLines.join('\\n'),\n    smsText,\n    contactBody\n  }\n}];"
+      }
+    },
+    {
+      "id": "http-upsert-01",
+      "name": "GHL Upsert Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 320],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/contacts/upsert",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer pit-7ed98097-6fc7-4341-bdde-3ed1ac735dd3"
+            },
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Format Order Data').item.json.contactBody) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "if-upsert-01",
+      "name": "Upsert Successful?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 320],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-contact-id",
+              "leftValue": "={{ $json.contact && $json.contact.id ? $json.contact.id : '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "http-note-01",
+      "name": "GHL Create Note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 220],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://services.leadconnectorhq.com/contacts/' + $('GHL Upsert Contact').item.json.contact.id + '/notes' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer pit-7ed98097-6fc7-4341-bdde-3ed1ac735dd3"
+            },
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ body: $('Format Order Data').item.json.noteText }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "http-sms-01",
+      "name": "GHL Send SMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 220],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/conversations/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer pit-7ed98097-6fc7-4341-bdde-3ed1ac735dd3"
+            },
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ type: 'SMS', contactId: $('GHL Upsert Contact').item.json.contact.id, message: $('Format Order Data').item.json.smsText }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "set-success-01",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1560, 220],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s1",
+              "name": "status",
+              "value": "success",
+              "type": "string"
+            },
+            {
+              "id": "s2",
+              "name": "orderId",
+              "value": "={{ $('Format Order Data').item.json.orderId }}",
+              "type": "string"
+            },
+            {
+              "id": "s3",
+              "name": "contactId",
+              "value": "={{ $('GHL Upsert Contact').item.json.contact.id }}",
+              "type": "string"
+            },
+            {
+              "id": "s4",
+              "name": "message",
+              "value": "Order synced to GHL. Contact upserted, note created, SMS sent.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "set-error-01",
+      "name": "Log GHL Sync Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1120, 440],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1",
+              "name": "status",
+              "value": "error",
+              "type": "string"
+            },
+            {
+              "id": "e2",
+              "name": "orderId",
+              "value": "={{ $('Format Order Data').item.json.orderId }}",
+              "type": "string"
+            },
+            {
+              "id": "e3",
+              "name": "ghlResponse",
+              "value": "={{ JSON.stringify($('GHL Upsert Contact').item.json) }}",
+              "type": "string"
+            },
+            {
+              "id": "e4",
+              "name": "message",
+              "value": "GHL contact upsert failed. Order was confirmed to customer but not synced to CRM. Investigate GHL response.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Voice Agent Webhook": {
+      "main": [
+        [
+          {
+            "node": "Format Order Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Order Data": {
+      "main": [
+        [
+          {
+            "node": "GHL Upsert Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL Upsert Contact": {
+      "main": [
+        [
+          {
+            "node": "Upsert Successful?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Successful?": {
+      "main": [
+        [
+          {
+            "node": "GHL Create Note",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log GHL Sync Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL Create Note": {
+      "main": [
+        [
+          {
+            "node": "GHL Send SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL Send SMS": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    { "name": "parkash-sweets" },
+    { "name": "voice-agent" }
+  ]
+}
