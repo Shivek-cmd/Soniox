@@ -5,7 +5,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.8.14 /uv /uvx /bin/
 ADD . /app
 
 WORKDIR /app
-RUN uv sync --locked
+RUN uv sync
 
 ENV PORT=5050
 EXPOSE 5050
