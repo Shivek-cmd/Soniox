@@ -1,6 +1,11 @@
 import os
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta, timezone
+
+_EDT = timezone(timedelta(hours=-4))  # Toronto (EDT, UTC-4)
+
+
+def _toronto_now() -> datetime:
+    return datetime.now(_EDT)
 
 import httpx
 from openai.types.chat import ChatCompletionFunctionToolParam
@@ -271,9 +276,9 @@ TRANSFER — call `transfer_call` immediately (before responding) when:
 5. You've failed to understand them 3+ times in a row.
 After the tool responds, say only: "Let me connect you with our team right away." Then stop.
 
-Today is {datetime.now(ZoneInfo("America/Toronto")).strftime("%A, %B %d, %Y")}. Current time: {datetime.now(ZoneInfo("America/Toronto")).strftime("%I:%M %p")} Toronto time. Restaurant hours: 11 AM to 10 PM daily. If the current time is before 11 AM or at/after 10 PM, apologize and say we're closed — never take an order outside these hours.
+Today is {_toronto_now().strftime("%A, %B %d, %Y")}. Current time: {_toronto_now().strftime("%I:%M %p")} Toronto time. Restaurant hours: 11 AM to 10 PM daily. If the current time is before 11 AM or at/after 10 PM, apologize and say we're closed — never take an order outside these hours.
 
-When writing special_instructions, use natural language (e.g. "spicy, no onions") — never key-value format like "spice: spicy".
+When writing special_instructions, use natural language (e.g. "Spicy, no onions") — never key-value format like "spice: spicy".
 """
 
 
@@ -592,7 +597,7 @@ async def place_order(
     )
 
     # Reject orders outside business hours (11 AM – 10 PM Toronto)
-    toronto_now = datetime.now(ZoneInfo("America/Toronto"))
+    toronto_now = _toronto_now()
     if not (11 <= toronto_now.hour < 22):
         return {
             "success": False,
