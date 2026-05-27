@@ -368,7 +368,8 @@ class LLMProcessor(MessageProcessor):
             self.log.debug("No new user text, cancelling LLM generation task")
             return
 
-        self.log.debug("Starting LLM generation task", messages=self._messages)
+        last_msg = self._messages[-1] if self._messages else {}
+        self.log.debug("User → LLM", text=(last_msg.get("content") or "")[:200])
 
         self._llm_start_time = time.perf_counter()
         self._first_token_sent = False
