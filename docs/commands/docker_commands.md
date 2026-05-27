@@ -312,3 +312,9 @@ docker compose up -d --build
 docker compose ps
 docker compose logs -f
 ```
+
+
+
+
+
+git pull && docker compose down && docker compose build --no-cache && docker compose up -d
