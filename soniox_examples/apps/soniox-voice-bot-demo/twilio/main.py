@@ -5,6 +5,7 @@ import asyncio
 import base64
 import json
 import os
+from urllib.parse import quote
 
 import audioop
 import websockets
@@ -99,11 +100,16 @@ def load_opening_greeting_ulaw() -> bytes | None:
 @app.api_route("/incoming-call", methods=["GET", "POST"])
 async def handle_incoming_call(request: Request):
     """Handle incoming call and return TwiML response to connect to Media Stream."""
-    response = VoiceResponse()
+    form_data = await request.form()
+    caller_phone = form_data.get("From", "")
 
+    response = VoiceResponse()
     host = request.url.hostname
     connect = Connect()
-    connect.stream(url=f"wss://{host}/media-stream")
+    stream_url = f"wss://{host}/media-stream"
+    if caller_phone:
+        stream_url += f"?caller_phone={quote(str(caller_phone), safe='')}"
+    connect.stream(url=stream_url)
     response.append(connect)
 
     return HTMLResponse(content=str(response), media_type="application/xml")
@@ -129,6 +135,8 @@ async def handle_media_stream(websocket: WebSocket):
     """Handle WebSocket connections between Twilio and Soniox voice bot."""
     await websocket.accept()
 
+    caller_phone = websocket.query_params.get("caller_phone", "")
+
     opening_greeting_ulaw = load_opening_greeting_ulaw()
     skip_voice_server_greeting = "true" if opening_greeting_ulaw else "false"
 
@@ -138,6 +146,8 @@ async def handle_media_stream(websocket: WebSocket):
         f"&language={VOICE_BOT_LANGUAGE}&voice={VOICE_BOT_VOICE}"
         f"&skip_opening_greeting={skip_voice_server_greeting}"
     )
+    if caller_phone:
+        voice_bot_url_with_params += f"&caller_phone={quote(caller_phone, safe='')}"
     async with websockets.connect(voice_bot_url_with_params) as voicebot_ws:
         # Per-call state
         stream_sid = None

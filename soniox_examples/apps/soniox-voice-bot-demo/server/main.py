@@ -115,6 +115,7 @@ class QueryParams(pydantic.BaseModel):
     audio_out_format: str = "pcm_s16le"
     audio_out_sample_rate: int = 24000
     skip_opening_greeting: bool = False
+    caller_phone: str = ""
 
     @pydantic.model_validator(mode="before")
     @classmethod
@@ -161,7 +162,7 @@ async def handle(websocket: ServerConnection):
         await send_error_and_close(websocket, "Invalid language")
         return
 
-    state = RestaurantState()
+    state = RestaurantState(caller_phone=params.caller_phone)
 
     def select_language_without_llm(language: str):
         config = LANGUAGE_CONFIG.get(language.lower(), LANGUAGE_CONFIG["english"])
@@ -184,7 +185,7 @@ async def handle(websocket: ServerConnection):
         LLMProcessor(
             api_key=OPENAI_API_KEY,
             model=OPENAI_MODEL,
-            system_message=get_system_message(LANGUAGES_MAP[params.language]),
+            system_message=get_system_message(LANGUAGES_MAP[params.language], caller_phone=params.caller_phone),
             tools=get_tools(state),
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,

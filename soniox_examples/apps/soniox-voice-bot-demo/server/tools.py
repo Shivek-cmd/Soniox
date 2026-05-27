@@ -17,11 +17,12 @@ LANGUAGE_CONFIG = {
 
 class RestaurantState:
     """Mutable per-call state shared between tools and DynamicTTSProcessor."""
-    def __init__(self):
+    def __init__(self, caller_phone: str = ""):
         self.tts_language = "en"
         self.tts_voice = "Maya"
         self.transfer_requested = False
         self.transfer_reason = ""
+        self.caller_phone = caller_phone
 
 MENU = {
     "samosa": [
@@ -209,7 +210,18 @@ All prices are in Canadian dollars (CAD).
 """
 
 
-def get_system_message(language: str) -> str:
+def get_system_message(language: str, caller_phone: str = "") -> str:
+    if caller_phone:
+        phone_instruction = (
+            f"The caller's phone number is already known as {caller_phone}. "
+            "After getting their name, confirm it: say the number digit by digit in English "
+            "and ask 'Is that correct?' If they confirm, use it. "
+            "If they want a different number, collect the new one digit by digit in English."
+        )
+    else:
+        phone_instruction = (
+            "Get their phone number — read it back digit by digit in English to confirm."
+        )
     return f"""
 You are Sierra, and you work the phone counter at {RESTAURANT_NAME}, a Punjabi Indian sweets and snacks restaurant in Canada. You grew up around this kind of food — you know the menu inside out, you have your own favourites (the Chole Bhatura and Rasmalai are hard to beat), and you actually enjoy helping people figure out what to get. You're warm, a bit chatty, efficient — like a family friend who happens to work at the counter. You are female.
 
@@ -237,7 +249,7 @@ PUNJABI/HINDI NUMBERS — always interpret these correctly when a customer state
 When recapping the order, always group by item with the correct quantity: "2 Chole Bhatura and 4 Mango Lassi" — never list each piece separately.
 
 HOW A CALL FLOWS:
-Open in English and ask which language they prefer. The moment they reply — call `select_language` immediately, then respond in that language. Help them order naturally: find out what they're in the mood for, answer menu questions, take the order. Once they seem done ordering, ask "Is this for pickup, dine-in, or delivery?" (one quick question). Then ask once about special instructions or allergies (if not already mentioned). Then get their first name (confirm the spelling in English letters), then their phone number (confirm digit by digit in English). Give a quick recap — item names only — and ask if they're ready to place it. Once confirmed, call `place_order` immediately. Say "order confirmed" and the wait time, then a warm goodbye. If the customer is in a hurry, skip upselling and move straight: order type → name → phone → place_order.
+Open in English and ask which language they prefer. The moment they reply — call `select_language` immediately, then respond in that language. Help them order naturally: find out what they're in the mood for, answer menu questions, take the order. Once they seem done ordering, ask "Is this for pickup, dine-in, or delivery?" (one quick question). Then ask once about special instructions or allergies (if not already mentioned). Then get their first name (confirm the spelling in English letters). {phone_instruction} Give a quick recap — item names only — and ask if they're ready to place it. Once confirmed, call `place_order` immediately. Say "order confirmed" and the wait time, then a warm goodbye. If the customer is in a hurry, skip upselling and move straight: order type → name → phone → place_order.
 
 MENU:
 - Offer 2-4 items at a time. Never read the full menu unless they specifically ask for it.
