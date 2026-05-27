@@ -543,12 +543,31 @@ place_order_tool_description = ChatCompletionFunctionToolParam(
 
 
 def _lookup_price(item_name: str) -> float:
-    """Look up the menu price for an item by name (case-insensitive)."""
+    """Look up menu price: alias → exact → substring match."""
     name_lower = item_name.strip().lower()
+
+    # 1. Alias table
+    if name_lower in ITEM_ALIASES:
+        canonical = ITEM_ALIASES[name_lower].lower()
+        for category_items in MENU.values():
+            for item in category_items:
+                if item["name"].lower() == canonical:
+                    return item["price"]
+
+    # 2. Exact name match
     for category_items in MENU.values():
         for item in category_items:
             if item["name"].lower() == name_lower:
                 return item["price"]
+
+    # 3. Substring match — handles "Rasmalai" → "Rasmalai (2 pcs)"
+    #    and "Express Spring Roll" → "Spring Roll"
+    for category_items in MENU.values():
+        for item in category_items:
+            menu_lower = item["name"].lower()
+            if name_lower in menu_lower or menu_lower in name_lower:
+                return item["price"]
+
     return 0.0
 
 
@@ -569,11 +588,23 @@ async def place_order(
         f"items={[i['name'] for i in items]})"
     )
 
-    # Fill in any missing prices from the menu and recalculate total.
-    # The LLM doesn't know prices during ordering, so it often passes 0.
+    # Fill in prices from menu; reject if any item is not found.
+    not_found = []
     for item in items:
         if not item.get("price"):
             item["price"] = _lookup_price(item["name"])
+        if not item.get("price"):
+            not_found.append(item["name"])
+
+    if not_found:
+        return {
+            "success": False,
+            "error": (
+                f"Item(s) not found on the menu: {', '.join(not_found)}. "
+                "Tell the customer these items are not available and ask them to choose from the actual menu."
+            ),
+        }
+
     total_amount = sum(item["price"] * item.get("quantity", 1) for item in items)
 
     order_id = f"PS-{datetime.now().strftime('%H%M%S')}"
