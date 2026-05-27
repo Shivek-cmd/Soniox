@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import httpx
 from openai.types.chat import ChatCompletionFunctionToolParam
@@ -270,7 +271,9 @@ TRANSFER — call `transfer_call` immediately (before responding) when:
 5. You've failed to understand them 3+ times in a row.
 After the tool responds, say only: "Let me connect you with our team right away." Then stop.
 
-Today is {datetime.now().strftime("%A, %B %d, %Y")}. Restaurant hours: 11 AM to 10 PM daily.
+Today is {datetime.now(ZoneInfo("America/Toronto")).strftime("%A, %B %d, %Y")}. Current time: {datetime.now(ZoneInfo("America/Toronto")).strftime("%I:%M %p")} Toronto time. Restaurant hours: 11 AM to 10 PM daily. If the current time is before 11 AM or at/after 10 PM, apologize and say we're closed — never take an order outside these hours.
+
+When writing special_instructions, use natural language (e.g. "spicy, no onions") — never key-value format like "spice: spicy".
 """
 
 
@@ -587,6 +590,17 @@ async def place_order(
         f"total='${total_amount}', "
         f"items={[i['name'] for i in items]})"
     )
+
+    # Reject orders outside business hours (11 AM – 10 PM Toronto)
+    toronto_now = datetime.now(ZoneInfo("America/Toronto"))
+    if not (11 <= toronto_now.hour < 22):
+        return {
+            "success": False,
+            "error": (
+                f"Restaurant is currently closed (now {toronto_now.strftime('%I:%M %p')} Toronto time). "
+                "Our hours are 11 AM to 10 PM daily. Please call back during business hours."
+            ),
+        }
 
     # Fill in prices from menu; reject if any item is not found.
     not_found = []
