@@ -318,3 +318,6 @@ docker compose logs -f
 
 
 git pull && docker compose down && docker compose build --no-cache && docker compose up -d
+
+
+docker compose up -d --build voice-server
