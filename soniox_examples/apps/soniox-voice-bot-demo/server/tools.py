@@ -9,9 +9,9 @@ RESTAURANT_NAME = "Parkash Sweets"
 SPOKEN_RESTAURANT_NAME = "Prakaash Sweets"
 
 LANGUAGE_CONFIG = {
-    "english": {"tts_language": "en", "tts_voice": "Maya"},
-    "hindi":   {"tts_language": "hi", "tts_voice": "Maya"},
-    "punjabi": {"tts_language": "pa", "tts_voice": "Maya"},
+    "english": {"tts_language": "en", "tts_voice": "Nina"},
+    "hindi":   {"tts_language": "hi", "tts_voice": "Nina"},
+    "punjabi": {"tts_language": "pa", "tts_voice": "Nina"},
 }
 
 
@@ -19,7 +19,7 @@ class RestaurantState:
     """Mutable per-call state shared between tools and DynamicTTSProcessor."""
     def __init__(self, caller_phone: str = ""):
         self.tts_language = "en"
-        self.tts_voice = "Maya"
+        self.tts_voice = "Nina"
         self.transfer_requested = False
         self.transfer_reason = ""
         self.caller_phone = caller_phone
