@@ -6,9 +6,10 @@ interface Props {
   messages: Message[];
   confirmedOrder: OrderConfirmed | null;
   isCallActive: boolean;
+  embedded?: boolean; // when true: no h-full, compact layout for inline use
 }
 
-export function OrderPanel({ messages, confirmedOrder, isCallActive }: Props) {
+export function OrderPanel({ messages, confirmedOrder, isCallActive, embedded = false }: Props) {
   // Parse bot messages for in-progress item detection
   const detectedItems = useMemo(() => {
     if (confirmedOrder) return [];
@@ -18,39 +19,37 @@ export function OrderPanel({ messages, confirmedOrder, isCallActive }: Props) {
     return parseOrderFromBotMessages(botTexts);
   }, [messages, confirmedOrder]);
 
+  const pad = embedded ? "px-4 py-3" : "px-5 py-5";
+
   // ── Confirmed state ────────────────────────────────────
   if (confirmedOrder) {
-    return <ConfirmedView order={confirmedOrder} />;
+    return <ConfirmedView order={confirmedOrder} embedded={embedded} />;
   }
 
   // ── Active call with detected items ───────────────────
   if (isCallActive) {
     return (
-      <div className="h-full flex flex-col px-5 py-5">
+      <div className={`flex flex-col ${embedded ? "" : "h-full"} ${pad}`}>
         <SectionHeader title="Your Order" />
-
-        {detectedItems.length === 0 ? (
-          <BuildingState />
-        ) : (
-          <ItemsView items={detectedItems} />
-        )}
+        {detectedItems.length === 0 ? <BuildingState embedded={embedded} /> : <ItemsView items={detectedItems} />}
       </div>
     );
   }
 
   // ── Idle ───────────────────────────────────────────────
-  return <IdleState />;
+  return <IdleState embedded={embedded} />;
 }
 
 // ── Views ────────────────────────────────────────────────
 
-function ConfirmedView({ order }: { order: OrderConfirmed }) {
+function ConfirmedView({ order, embedded = false }: { order: OrderConfirmed; embedded?: boolean }) {
   const orderTypeLabel =
     order.order_type === "pickup"   ? "Pickup" :
     order.order_type === "dine_in"  ? "Dine-in" : "Delivery";
 
+  const pad = embedded ? "px-4 py-3" : "px-5 py-5";
   return (
-    <div className="h-full flex flex-col px-5 py-5 overflow-y-auto">
+    <div className={`flex flex-col ${embedded ? "" : "h-full overflow-y-auto"} ${pad}`}>
       {/* Confirmed banner */}
       <div
         className="animate-confirm-pop rounded-xl p-4 mb-5 flex items-center gap-3"
@@ -160,39 +159,40 @@ function ItemsView({ items }: { items: { name: string; quantity: number; price: 
   );
 }
 
-function BuildingState() {
+function BuildingState({ embedded = false }: { embedded?: boolean }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center py-10">
-      <div className="flex gap-1.5 mb-4">
+    <div className={`flex flex-col items-center justify-center ${embedded ? "py-4" : "flex-1 py-10"}`}>
+      <div className="flex gap-1.5 mb-3">
         <span className="w-2 h-2 rounded-full dot-1" style={{ background: "var(--accent)" }} />
         <span className="w-2 h-2 rounded-full dot-2" style={{ background: "var(--accent)" }} />
         <span className="w-2 h-2 rounded-full dot-3" style={{ background: "var(--accent)" }} />
       </div>
-      <p className="text-sm font-medium" style={{ color: "var(--text-muted)" }}>
+      <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
         Taking your order…
-      </p>
-      <p className="text-xs mt-1" style={{ color: "var(--text-dim)" }}>
-        Items appear once Sierra confirms quantities
       </p>
     </div>
   );
 }
 
-function IdleState() {
+function IdleState({ embedded = false }: { embedded?: boolean }) {
   return (
-    <div className="h-full flex flex-col items-center justify-center px-6 select-none">
+    <div className={`flex items-center gap-3 select-none ${embedded ? "px-4 py-4" : "h-full flex-col justify-center px-6"}`}>
       <div
-        className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+        className={`${embedded ? "w-8 h-8 rounded-xl flex-none" : "w-14 h-14 rounded-2xl mb-4"} flex items-center justify-center`}
         style={{ background: "var(--surface-raised)" }}
       >
-        <BagIcon />
+        <BagIcon size={embedded ? 16 : 24} />
       </div>
-      <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-muted)" }}>
-        Your order will appear here
-      </p>
-      <p className="text-xs text-center" style={{ color: "var(--text-dim)" }}>
-        Start a call and talk to Sierra to begin ordering
-      </p>
+      <div>
+        <p className={`${embedded ? "text-xs" : "text-sm"} font-semibold`} style={{ color: "var(--text-muted)" }}>
+          Your order will appear here
+        </p>
+        {!embedded && (
+          <p className="text-xs text-center mt-1" style={{ color: "var(--text-dim)" }}>
+            Start a call to begin ordering
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -259,9 +259,9 @@ function CheckIcon() {
   );
 }
 
-function BagIcon() {
+function BagIcon({ size = 24 }: { size?: number }) {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
       <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
       <line x1="3" y1="6" x2="21" y2="6" />
       <path d="M16 10a4 4 0 0 1-8 0" />

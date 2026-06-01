@@ -36,20 +36,16 @@ OPENING_GREETING = (
 )
 
 OPENING_GREETINGS = {
-    "punjabi": (
-        "Sat Sri Akal! Parkash Sweets vich aapda swagat hai! "
-        "Main Sierra hanji — tuhadi virtual assistant. "
-        "Aaj tussi ki lena chahunde ho?"
+    "english": (
+        "Hey! I'm Sierra calling from Parkash Sweets. How can I help you today?"
     ),
     "hindi": (
-        "Namaste! Parkash Sweets mein aapka swagat hai! "
-        "Main Sierra hoon — aapki virtual assistant. "
-        "Aaj aap kya lena chahte hain?"
+        "Namaste! Main Sierra hoon, Parkash Sweets ki taraf se. "
+        "Aaj main aapki kaise help kar sakti hoon?"
     ),
-    "english": (
-        "Hi! Welcome to Parkash Sweets! "
-        "I'm Sierra, your virtual assistant. "
-        "What are you in the mood for today?"
+    "punjabi": (
+        "Sat Sri Akal! Main Sierra hanji, Parkash Sweets ton. "
+        "Aaj main tuhadi ki madad kar sakdi hanji?"
     ),
 }
 

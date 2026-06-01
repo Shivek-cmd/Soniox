@@ -26,12 +26,12 @@ body {
   margin: 0;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 3px; }
+/* Scrollbar */
+::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
 
-/* ── Animations ─────────────────────────────────────────── */
+/* ── Animations ───────────────────────────────────────────── */
 
 @keyframes msg-in {
   from { opacity: 0; transform: translateY(6px); }
@@ -59,10 +59,37 @@ body {
   40%            { transform: scale(1); opacity: 1;   }
 }
 
-.animate-msg-in        { animation: msg-in      0.22s ease-out both; }
-.animate-item-in       { animation: item-in     0.28s ease-out both; }
-.animate-confirm-pop   { animation: confirm-pop 0.35s ease-out both; }
-.animate-mic-ring      { animation: mic-ring    1.6s  infinite;      }
+/* Avatar animations */
+@keyframes avatar-pulse {
+  0%   { transform: scale(1);    opacity: 0.6; }
+  50%  { transform: scale(1.08); opacity: 0;   }
+  100% { transform: scale(1.15); opacity: 0;   }
+}
+
+@keyframes wave-bar {
+  from { transform: scaleY(0.4); }
+  to   { transform: scaleY(1);   }
+}
+
+/* Tab switch fade-in */
+@keyframes tab-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* Spin */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Utility classes */
+.animate-msg-in       { animation: msg-in      0.22s ease-out both; }
+.animate-item-in      { animation: item-in     0.28s ease-out both; }
+.animate-confirm-pop  { animation: confirm-pop 0.35s ease-out both; }
+.animate-mic-ring     { animation: mic-ring    1.6s  infinite;      }
+.animate-avatar-pulse { animation: avatar-pulse 1.5s ease-out infinite; }
+.animate-tab-in       { animation: tab-in      0.2s  ease-out both; }
 
 .dot-1 { animation: dot-bounce 1.2s 0.0s infinite; }
 .dot-2 { animation: dot-bounce 1.2s 0.2s infinite; }
