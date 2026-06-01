@@ -247,61 +247,37 @@ function OrderColumn({
           </div>
         )}
 
-        {/* Items detected */}
+        {/* Items detected — running order card */}
         {!confirmedOrder && detected.length > 0 && (
-          <div className="px-3 py-3 flex flex-col gap-2">
-            {detected.map((item, i) => (
-              <OrderItemRow key={item.name} name={item.name} qty={item.quantity} price={item.price} index={i} pending />
-            ))}
-            <div className="mt-2 pt-2 border-t flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
-              <span className="text-xs" style={{ color: "var(--text-dim)" }}>Estimated</span>
-              <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>
-                ${detected.reduce((s, i) => s + i.price * i.quantity, 0).toFixed(2)}
-              </span>
-            </div>
-            <p className="text-xs" style={{ color: "var(--text-dim)" }}>Prices confirmed on order placement</p>
-          </div>
-        )}
-
-        {/* Confirmed */}
-        {confirmedOrder && (
-          <div className="px-3 py-3 flex flex-col gap-2">
-            {/* Banner */}
-            <div
-              className="animate-confirm-pop rounded-xl px-3 py-2.5 flex items-center gap-2.5 mb-1"
-              style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)" }}
-            >
-              <span className="flex-none w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(34,197,94,0.2)" }}>
-                <CheckSvg />
-              </span>
-              <div>
-                <p className="text-xs font-semibold" style={{ color: "#4ade80" }}>Order Confirmed</p>
-                <p className="text-xs" style={{ color: "var(--text-dim)" }}>{confirmedOrder.order_id} · {confirmedOrder.wait_time}</p>
+          <div className="px-3 py-3">
+            <div className="rounded-xl overflow-hidden" style={{ border: "1px dashed rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.04)" }}>
+              <div className="px-3 py-2 border-b" style={{ borderColor: "rgba(245,158,11,0.2)" }}>
+                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--accent)" }}>Building Order…</p>
+              </div>
+              <div className="px-3 py-2 flex flex-col gap-1.5">
+                {detected.map((item) => (
+                  <div key={item.name} className="flex justify-between gap-2">
+                    <span className="text-xs truncate flex-1" style={{ color: "var(--text-muted)" }}>{item.quantity}× {item.name}</span>
+                    <span className="text-xs font-semibold flex-none" style={{ color: "var(--accent)" }}>${(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between pt-2 mt-1 border-t" style={{ borderColor: "rgba(245,158,11,0.2)" }}>
+                  <span className="text-xs" style={{ color: "var(--text-dim)" }}>Est. subtotal</span>
+                  <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>
+                    ${detected.reduce((s, i) => s + i.price * i.quantity, 0).toFixed(2)}
+                  </span>
+                </div>
               </div>
             </div>
-
-            {confirmedOrder.items.map((item, i) => (
-              <OrderItemRow key={item.name} name={item.name} qty={item.quantity} price={item.price} index={i} />
-            ))}
-
-            <div className="mt-1 pt-2 border-t flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
-              <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>Total</span>
-              <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>
-                ${confirmedOrder.total_amount.toFixed(2)}
-              </span>
-            </div>
-
-            {/* Customer info */}
-            <div className="mt-1 rounded-xl px-3 py-2.5 flex flex-col gap-1.5" style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}>
-              <InfoRow label="Name"  value={confirmedOrder.customer_name} />
-              <InfoRow label="Phone" value={confirmedOrder.phone_number} />
-              <InfoRow label="Type"  value={confirmedOrder.order_type === "dine_in" ? "Dine-in" : confirmedOrder.order_type === "pickup" ? "Pickup" : "Delivery"} accent />
-              {confirmedOrder.special_instructions && (
-                <InfoRow label="Notes" value={confirmedOrder.special_instructions} />
-              )}
-            </div>
+            <p className="text-xs mt-2 text-center" style={{ color: "var(--text-dim)" }}>Final amount confirmed on placement</p>
           </div>
         )}
+
+        {/* Confirmed — full receipt */}
+        {confirmedOrder && (
+          <ReceiptCard order={confirmedOrder} />
+        )}
+
       </div>
     </div>
   );
@@ -380,34 +356,138 @@ function SierraFloat({ status }: { status: CallStatus }) {
 }
 
 // ─────────────────────────────────────────────
-// Small shared components
+// Receipt card (shown after order confirmed)
 // ─────────────────────────────────────────────
-function OrderItemRow({ name, qty, price, index, pending = false }: { name: string; qty: number; price: number; index: number; pending?: boolean }) {
+const RECEIPT_STYLE: React.CSSProperties = {
+  background: "#f9f8f4",
+  boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)",
+  borderRadius: 16,
+  overflow: "hidden",
+  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+};
+
+const R = {
+  label:   { fontSize: 11, color: "#999" } as React.CSSProperties,
+  value:   { fontSize: 11, color: "#333" } as React.CSSProperties,
+  bold:    { fontSize: 11, color: "#1a1a1a", fontWeight: 600 } as React.CSSProperties,
+  mono:    { fontFamily: "ui-monospace, monospace" } as React.CSSProperties,
+  dash:    { borderBottom: "1.5px dashed #dedad3", margin: "0 0 0 0" } as React.CSSProperties,
+  section: { padding: "12px 16px", borderBottom: "1.5px dashed #dedad3" } as React.CSSProperties,
+};
+
+function ReceiptCard({ order }: { order: OrderConfirmed }) {
+  const subtotal = order.total_amount;
+  const gst      = subtotal * 0.05;
+  const total    = subtotal + gst;
+  const typeLabel = order.order_type === "dine_in" ? "Dine-in" : order.order_type === "pickup" ? "Pickup" : "Delivery";
+  const now      = new Date();
+  const dateFmt  = now.toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  const timeFmt  = now.toLocaleTimeString("en-CA", { hour: "2-digit", minute: "2-digit" });
+
   return (
-    <div
-      className="animate-item-in flex items-start justify-between gap-2 rounded-lg px-3 py-2.5"
-      style={{
-        background: "var(--surface-raised)",
-        border: `1px solid ${pending ? "rgba(245,158,11,0.15)" : "var(--border)"}`,
-        animationDelay: `${index * 50}ms`,
-      }}
-    >
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium leading-snug truncate" style={{ color: "var(--text)" }}>{name}</p>
-        <p className="text-xs mt-0.5" style={{ color: "var(--text-dim)" }}>× {qty}</p>
+    <div className="animate-confirm-pop px-3 py-3">
+      <div style={RECEIPT_STYLE}>
+
+        {/* ── Restaurant header ── */}
+        <div style={{ ...R.section, textAlign: "center", paddingTop: 18, paddingBottom: 16 }}>
+          <p style={{ fontSize: 10, color: "#bbb", letterSpacing: 3, textTransform: "uppercase", marginBottom: 6 }}>
+            Authentic Punjabi Cuisine
+          </p>
+          <h2 style={{ fontSize: 20, fontWeight: 900, color: "#1a1a1a", letterSpacing: -0.5, margin: "0 0 3px", fontFamily: "Georgia, serif" }}>
+            Parkash Sweets
+          </h2>
+          <p style={{ fontSize: 11, color: "#777", margin: "2px 0" }}>Edmonton, AB, Canada</p>
+          <p style={{ fontSize: 10, color: "#999", margin: "2px 0" }}>Open 11 AM – 10 PM · 7 Days a Week</p>
+        </div>
+
+        {/* ── Order status + ID ── */}
+        <div style={R.section}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", letterSpacing: 1, textTransform: "uppercase" }}>
+              Order Confirmed
+            </span>
+          </div>
+          <ReceiptRow label="Order #" value={order.order_id} mono bold />
+          <ReceiptRow label="Date"    value={dateFmt} />
+          <ReceiptRow label="Time"    value={timeFmt} />
+        </div>
+
+        {/* ── Customer info ── */}
+        <div style={R.section}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: "#aaa", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>
+            Customer
+          </p>
+          <ReceiptRow label="Name"     value={order.customer_name} bold />
+          <ReceiptRow label="Phone"    value={order.phone_number}  mono />
+          <ReceiptRow label="Type"     value={typeLabel}           color="#b45309" bold />
+          <ReceiptRow label="Ready in" value={order.wait_time}     color="#16a34a" bold />
+        </div>
+
+        {/* ── Items ── */}
+        <div style={R.section}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: "#aaa", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>
+            Items Ordered
+          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #e8e4dc", paddingBottom: 4, marginBottom: 8 }}>
+            <span style={{ fontSize: 10, color: "#bbb" }}>Description</span>
+            <span style={{ fontSize: 10, color: "#bbb" }}>Amount</span>
+          </div>
+          {order.items.map((item) => (
+            <div key={item.name} style={{ marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                <span style={{ ...R.value, flex: 1 }}>{item.name}</span>
+                <span style={{ ...R.bold, ...R.mono, flexShrink: 0 }}>${(item.price * item.quantity).toFixed(2)}</span>
+              </div>
+              <span style={{ ...R.label }}>{item.quantity} × ${item.price.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Totals ── */}
+        <div style={{ ...R.section, borderBottom: "2px dashed #dedad3" }}>
+          <ReceiptRow label="Subtotal" value={`$${subtotal.toFixed(2)}`} mono />
+          <ReceiptRow label="GST (5%)" value={`$${gst.toFixed(2)}`}     mono />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, paddingTop: 8, borderTop: "1px solid #dedad3" }}>
+            <span style={{ fontSize: 15, fontWeight: 900, color: "#1a1a1a" }}>TOTAL</span>
+            <span style={{ fontSize: 18, fontWeight: 900, color: "#b45309", fontFamily: "ui-monospace, monospace" }}>
+              ${total.toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        {/* ── Special instructions ── */}
+        {order.special_instructions && (
+          <div style={R.section}>
+            <p style={{ fontSize: 10, fontWeight: 700, color: "#aaa", letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>
+              Special Instructions
+            </p>
+            <p style={{ fontSize: 11, color: "#555" }}>{order.special_instructions}</p>
+          </div>
+        )}
+
+        {/* ── Footer ── */}
+        <div style={{ padding: "14px 16px 18px", textAlign: "center" }}>
+          <p style={{ fontSize: 14, fontWeight: 800, color: "#1a1a1a", marginBottom: 3 }}>🙏 Thank You!</p>
+          <p style={{ fontSize: 11, color: "#777" }}>Enjoy your food. See you again soon!</p>
+          <p style={{ fontSize: 10, color: "#ccc", marginTop: 10, letterSpacing: 2 }}>· · · · · · · · · · · ·</p>
+          <p style={{ fontSize: 10, color: "#bbb", marginTop: 4 }}>Prices in CAD · Tax not included in menu prices</p>
+        </div>
+
       </div>
-      <span className="text-xs font-semibold flex-none" style={{ color: "var(--accent)" }}>
-        ${(price * qty).toFixed(2)}
-      </span>
     </div>
   );
 }
 
-function InfoRow({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function ReceiptRow({ label, value, bold = false, mono = false, color }: {
+  label: string; value: string; bold?: boolean; mono?: boolean; color?: string;
+}) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-xs" style={{ color: "var(--text-dim)" }}>{label}</span>
-      <span className="text-xs font-medium" style={{ color: accent ? "var(--accent)" : "var(--text-muted)" }}>{value}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+      <span style={R.label}>{label}</span>
+      <span style={{ ...R.value, ...(bold ? { fontWeight: 600, color: color ?? "#1a1a1a" } : {}), ...(mono ? R.mono : {}), ...(color && !bold ? { color } : {}) }}>
+        {value}
+      </span>
     </div>
   );
 }
@@ -449,10 +529,3 @@ function BagSvg() {
   );
 }
 
-function CheckSvg() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
