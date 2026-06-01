@@ -1,8 +1,8 @@
 FROM node:22-alpine AS build
 
 WORKDIR /app
-COPY package.json yarn.lock ./
-RUN yarn install
+COPY package*.json ./
+RUN npm ci
 COPY . .
 
 ENV NODE_ENV=production
@@ -12,7 +12,7 @@ ENV VITE_SONIOX_VOICE_BOT_WS_URL=${VITE_SONIOX_VOICE_BOT_WS_URL}
 
 RUN echo "VITE_SONIOX_VOICE_BOT_WS_URL is set to: ${VITE_SONIOX_VOICE_BOT_WS_URL}"
 
-RUN yarn build
+RUN npm run build
 
 FROM nginx:1.29.1-alpine AS prod
 

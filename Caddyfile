@@ -1,3 +1,18 @@
 :80 {
-    reverse_proxy twilio-bridge:5050
+    # Browser WebSocket → voice-server (frontend app)
+    @browser_ws path /ws
+    handle @browser_ws {
+        reverse_proxy voice-server:8765
+    }
+
+    # Twilio phone call endpoints → twilio-bridge
+    @twilio path /incoming-call /transfer-twiml /media-stream
+    handle @twilio {
+        reverse_proxy twilio-bridge:5050
+    }
+
+    # React frontend (everything else)
+    handle {
+        reverse_proxy frontend:80
+    }
 }

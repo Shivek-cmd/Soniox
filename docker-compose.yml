@@ -31,6 +31,15 @@ services:
       - voice-server
     restart: unless-stopped
 
+  frontend:
+    build:
+      context: ./soniox_examples/apps/soniox-voice-bot-demo/frontend
+      args:
+        VITE_SONIOX_VOICE_BOT_WS_URL: wss://voice.bizbull.ai/ws
+    depends_on:
+      - voice-server
+    restart: unless-stopped
+
   caddy:
     image: caddy:2-alpine
     dns:
@@ -44,6 +53,7 @@ services:
       - caddy_data:/data
     depends_on:
       - twilio-bridge
+      - frontend
     restart: unless-stopped
 
 volumes:
