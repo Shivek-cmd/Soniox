@@ -23,6 +23,7 @@ class RestaurantState:
         self.transfer_requested = False
         self.transfer_reason = ""
         self.caller_phone = caller_phone
+        self.confirmed_order: dict | None = None
 
 MENU = {
     "samosa": [
@@ -684,10 +685,32 @@ def get_tools(state: RestaurantState):
         state.tts_voice = config["tts_voice"]
         return f"Language switched to {language}. Now respond in {language}."
 
+    async def place_order_and_notify(
+        customer_name: str,
+        phone_number: str,
+        items: list,
+        total_amount: float,
+        order_type: str = "pickup",
+        delivery_address: str = "",
+        special_instructions: str = "",
+    ) -> dict:
+        result = await place_order(
+            customer_name=customer_name,
+            phone_number=phone_number,
+            items=items,
+            total_amount=total_amount,
+            order_type=order_type,
+            delivery_address=delivery_address,
+            special_instructions=special_instructions,
+        )
+        if result.get("success"):
+            state.confirmed_order = result
+        return result
+
     return [
         (transfer_call_tool_description, transfer_call),
         (select_language_tool_description, select_language),
         (get_menu_tool_description, get_menu),
         (check_item_availability_tool_description, check_item_availability),
-        (place_order_tool_description, place_order),
+        (place_order_tool_description, place_order_and_notify),
     ]

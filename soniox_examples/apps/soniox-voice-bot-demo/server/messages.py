@@ -148,3 +148,31 @@ class TransferCallMessage(Message):
 
     def json(self):
         return json.dumps({"type": "transfer", "reason": self._reason})
+
+
+class OrderConfirmedMessage(Message):
+    def __init__(
+        self,
+        order_id: str,
+        customer_name: str,
+        phone_number: str,
+        order_type: str,
+        items: list,
+        total_amount: float,
+        wait_time: str,
+        special_instructions: str = "",
+    ):
+        self._data = {
+            "type": "order_confirmed",
+            "order_id": order_id,
+            "customer_name": customer_name,
+            "phone_number": phone_number,
+            "order_type": order_type,
+            "items": items,
+            "total_amount": round(total_amount, 2),
+            "wait_time": wait_time,
+            "special_instructions": special_instructions,
+        }
+
+    def json(self):
+        return json.dumps(self._data)

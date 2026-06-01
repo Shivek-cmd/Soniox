@@ -35,6 +35,24 @@ OPENING_GREETING = (
     "Aap kis vich comfortable ho?"
 )
 
+OPENING_GREETINGS = {
+    "punjabi": (
+        "Sat Sri Akal! Parkash Sweets vich aapda swagat hai! "
+        "Main Sierra hanji — tuhadi virtual assistant. "
+        "Aaj tussi ki lena chahunde ho?"
+    ),
+    "hindi": (
+        "Namaste! Parkash Sweets mein aapka swagat hai! "
+        "Main Sierra hoon — aapki virtual assistant. "
+        "Aaj aap kya lena chahte hain?"
+    ),
+    "english": (
+        "Hi! Welcome to Parkash Sweets! "
+        "I'm Sierra, your virtual assistant. "
+        "What are you in the mood for today?"
+    ),
+}
+
 LANGUAGE_PROMPT = "Main Punjabi, Hindi, te English vich help kar sakdi hanji — aap kis vich comfortable ho?"
 
 LANGUAGE_SELECTION_TERMS = {
@@ -129,6 +147,8 @@ class LLMProcessor(MessageProcessor):
         max_tokens: int = 120,
         on_language_selected: Callable[[str], None] | None = None,
         send_opening_greeting: bool = True,
+        opening_greeting: str | None = None,
+        language_preselected: bool = False,
     ):
         """Initialize the LLM processor.
 
@@ -155,8 +175,9 @@ class LLMProcessor(MessageProcessor):
             if tool[0]["type"] == "function":
                 self._tool_functions[tool[0]["function"]["name"]] = tool[1]
 
+        self._opening_greeting = opening_greeting or OPENING_GREETING
         self._active_task: asyncio.Task | None = None
-        self._awaiting_language_selection = True
+        self._awaiting_language_selection = not language_preselected
         self._user_speech_started = False
         self._recent_assistant_texts: list[str] = []
         self._messages: list[ChatCompletionMessageParam] = [
@@ -274,16 +295,16 @@ class LLMProcessor(MessageProcessor):
             )
 
     async def _send_opening_greeting(self):
-        message = LLMChunkMessage(OPENING_GREETING)
+        message = LLMChunkMessage(self._opening_greeting)
         await self._send_message(message)
         self._append_llm_message(message)
-        self._remember_assistant_text(OPENING_GREETING)
-        await self._send_message(LLMFullMessage(OPENING_GREETING))
+        self._remember_assistant_text(self._opening_greeting)
+        await self._send_message(LLMFullMessage(self._opening_greeting))
 
     def _record_opening_greeting(self):
-        message = LLMChunkMessage(OPENING_GREETING)
+        message = LLMChunkMessage(self._opening_greeting)
         self._append_llm_message(message)
-        self._remember_assistant_text(OPENING_GREETING)
+        self._remember_assistant_text(self._opening_greeting)
 
     async def _send_language_prompt(self):
         message = LLMChunkMessage(LANGUAGE_PROMPT)

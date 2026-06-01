@@ -13,8 +13,8 @@ from websockets import ServerConnection
 from websockets.asyncio.server import serve
 
 from languages import LANGUAGES, LANGUAGES_MAP
-from messages import ErrorMessage, TransferCallMessage
-from processors.llm import LLMProcessor
+from messages import ErrorMessage, OrderConfirmedMessage, TransferCallMessage
+from processors.llm import LLMProcessor, OPENING_GREETINGS
 from processors.message_processor import MessageProcessor
 from processors.stt import STTProcessor
 from processors.tts import TTSProcessor
@@ -100,6 +100,21 @@ class DynamicTTSProcessor(TTSProcessor):
         await super()._generate_tts_response(message)
 
     async def _on_stream_finalized(self):
+        if self._state.confirmed_order and self._send_message:
+            order = self._state.confirmed_order
+            self._state.confirmed_order = None
+            await self._send_message(
+                OrderConfirmedMessage(
+                    order_id=order["order_id"],
+                    customer_name=order["customer_name"],
+                    phone_number=order.get("phone_number", ""),
+                    order_type=order["order_type"],
+                    items=order["items"],
+                    total_amount=order["total_amount"],
+                    wait_time=order["wait_time"],
+                    special_instructions=order.get("special_instructions", ""),
+                )
+            )
         if self._state.transfer_requested and self._send_message:
             self._state.transfer_requested = False
             await self._send_message(TransferCallMessage(self._state.transfer_reason))
@@ -169,6 +184,19 @@ async def handle(websocket: ServerConnection):
         state.tts_language = config["tts_language"]
         state.tts_voice = config["tts_voice"]
 
+    # Pre-select the language chosen in the frontend — no need to ask again
+    initial_language = LANGUAGES_MAP.get(params.language, "English").lower()
+    select_language_without_llm(initial_language)
+
+    # STT hints scoped to the selected language so transcription stays in the right script.
+    # English → Latin only. Hindi → Devanagari + Latin. Punjabi → all three.
+    STT_LANGUAGE_HINTS = {
+        "english": ["en"],
+        "hindi":   ["hi", "en"],
+        "punjabi": ["pa", "hi", "en"],
+    }
+    stt_hints = STT_LANGUAGE_HINTS.get(initial_language, ["pa", "hi", "en"])
+
     processors: List[MessageProcessor] = [
         VADProcessor(
             sample_rate=params.audio_in_sample_rate,
@@ -179,7 +207,7 @@ async def handle(websocket: ServerConnection):
             audio_format=params.audio_in_format,
             audio_sample_rate=params.audio_in_sample_rate,
             num_channels=params.audio_in_num_channels,
-            language_hints=["pa", "hi", "en"],
+            language_hints=stt_hints,
             context=STT_CONTEXT,
         ),
         LLMProcessor(
@@ -191,6 +219,8 @@ async def handle(websocket: ServerConnection):
             max_tokens=LLM_MAX_TOKENS,
             on_language_selected=select_language_without_llm,
             send_opening_greeting=not params.skip_opening_greeting,
+            opening_greeting=OPENING_GREETINGS.get(initial_language, OPENING_GREETINGS["english"]),
+            language_preselected=True,
         ),
         DynamicTTSProcessor(
             state=state,

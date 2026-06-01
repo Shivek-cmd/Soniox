@@ -33,11 +33,29 @@ export const messageSchema = z.union([
 
 export type Message = z.infer<typeof messageSchema>;
 
-/**
- * Add new message from backend to the list of messages.
- * If the last message is of the same type, extend it (LLM response streaming or new transcription tokens).
- * Otherwise, create a new message.
- */
+// Order confirmation — sent by server after place_order succeeds
+export const orderItemSchema = z.object({
+  name: z.string(),
+  quantity: z.number(),
+  price: z.number(),
+});
+
+export type OrderItem = z.infer<typeof orderItemSchema>;
+
+export const orderConfirmedSchema = z.object({
+  type: z.literal("order_confirmed"),
+  order_id: z.string(),
+  customer_name: z.string(),
+  phone_number: z.string(),
+  order_type: z.string(),
+  items: z.array(orderItemSchema),
+  total_amount: z.number(),
+  wait_time: z.string(),
+  special_instructions: z.string().optional().default(""),
+});
+
+export type OrderConfirmed = z.infer<typeof orderConfirmedSchema>;
+
 export function updateMessages(
   messages: Message[],
   message: Message
@@ -46,12 +64,10 @@ export function updateMessages(
   const lastMessage = messages.at(-1);
 
   if (!lastMessage) {
-    // First message
     return [message];
   }
 
   if (lastMessage.type !== message.type) {
-    // New message type, reset
     return [...previousMessages, lastMessage, message];
   }
 
@@ -59,7 +75,6 @@ export function updateMessages(
     lastMessage.type === "transcription" &&
     message.type === "transcription"
   ) {
-    // Extend the final and update non final tokens
     return [
       ...previousMessages,
       {
@@ -72,7 +87,6 @@ export function updateMessages(
     lastMessage.type === "llm_response" &&
     message.type === "llm_response"
   ) {
-    // Extend the text
     return [
       ...previousMessages,
       {
