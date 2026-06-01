@@ -29,11 +29,13 @@ from messages import (
 from processors.message_processor import MessageProcessor
 
 OPENING_GREETING = (
-    "Hi! This is Sierra calling from Prakaash Sweets. "
-    "Would you like to continue in English, Hindi, or Punjabi?"
+    "Sat Sri Akal! Parkash Sweets vich aapda swagat hai! "
+    "Main Sierra hanji — your virtual assistant. "
+    "Main Punjabi, Hindi, te English — teeno vich help kar sakdi hanji. "
+    "Aap kis vich comfortable ho?"
 )
 
-LANGUAGE_PROMPT = "Would you like to continue in English, Hindi, or Punjabi?"
+LANGUAGE_PROMPT = "Main Punjabi, Hindi, te English vich help kar sakdi hanji — aap kis vich comfortable ho?"
 
 LANGUAGE_SELECTION_TERMS = {
     # English variants
@@ -80,9 +82,9 @@ LANGUAGE_SELECTION_PATTERNS = {
 }
 
 LANGUAGE_SELECTED_RESPONSES = {
-    "english": "Sure! How can I help you?",
-    "hindi": "हां जी, मैं आपकी कैसे help कर सकती हूं?",
-    "punjabi": "ਹਾਂ ਜੀ, ਮੈਂ ਤੁਹਾਡੀ ਕੀ help ਕਰ ਸਕਦੀ ਹਾਂ?",
+    "english": "Perfect! So what are you in the mood for today?",
+    "hindi": "Hanji! Aaj kya lena chahte ho — kuch crispy, ya filling meal?",
+    "punjabi": "Hanji, cha'unda! Aaj ki lena chahunde ho — kuch crispy chahida ya filling?",
 }
 
 
