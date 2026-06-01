@@ -29,7 +29,8 @@
       "WebFetch(domain:community.n8n.io)",
       "WebFetch(domain:consultevo.com)",
       "WebFetch(domain:n8n.io)",
-      "WebFetch(domain:community.make.com)"
+      "WebFetch(domain:community.make.com)",
+      "Bash(pip install *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\shive\\.claude"
