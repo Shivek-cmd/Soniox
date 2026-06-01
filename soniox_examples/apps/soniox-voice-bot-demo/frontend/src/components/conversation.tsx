@@ -6,7 +6,6 @@ import {
   updateMessages,
   type Message,
   type OrderConfirmed,
-  type OrderItem,
 } from "../utils/messages";
 import { useAudioChunkPlayer } from "../hooks/useAudioChunkPlayer";
 import { useMicrophone } from "../hooks/useMicrophone";
