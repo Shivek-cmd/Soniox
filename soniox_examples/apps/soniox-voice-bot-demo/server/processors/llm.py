@@ -37,15 +37,15 @@ OPENING_GREETING = (
 
 OPENING_GREETINGS = {
     "english": (
-        "Hey! I'm Sierra calling from Parkash Sweets. How can I help you today?"
+        "Hey! I'm Sierra at Parkash Sweets. What can I get for you today?"
     ),
     "hindi": (
-        "Namaste! Main Sierra hoon, Parkash Sweets ki taraf se. "
-        "Aaj main aapki kaise help kar sakti hoon?"
+        "ਨਮਸਤੇ! ਮੈਂ Sierra ਹਾਂ, Parkash Sweets ਤੋਂ। "
+        "ਅੱਜ ਮੈਂ ਆਪਕੀ ਕਿਵੇਂ help ਕਰ ਸਕਦੀ ਹਾਂ?"
     ),
     "punjabi": (
-        "Sat Sri Akal! Main Sierra hanji, Parkash Sweets ton. "
-        "Aaj main tuhadi ki madad kar sakdi hanji?"
+        "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ Sierra ਹਾਂਜੀ, Parkash Sweets ਤੋਂ। "
+        "ਅੱਜ ਮੈਂ ਤੁਹਾਡੀ ਕੀ madad ਕਰ ਸਕਦੀ ਹਾਂ?"
     ),
 }
 
@@ -97,8 +97,8 @@ LANGUAGE_SELECTION_PATTERNS = {
 
 LANGUAGE_SELECTED_RESPONSES = {
     "english": "Perfect! So what are you in the mood for today?",
-    "hindi": "Hanji! Aaj kya lena chahte ho — kuch crispy, ya filling meal?",
-    "punjabi": "Hanji, cha'unda! Aaj ki lena chahunde ho — kuch crispy chahida ya filling?",
+    "hindi": "ਬਿਲਕੁਲ! ਅੱਜ ਕੀ ਲੈਣਾ ਹੈ — ਕੁਝ crispy, ਜਾਂ filling meal?",
+    "punjabi": "ਹਾਂਜੀ! ਅੱਜ ਕੀ ਲੈਣਾ ਹੈ — ਕੁਝ crispy ਚਾਹੀਦਾ ਜਾਂ filling?",
 }
 
 
