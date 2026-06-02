@@ -14,115 +14,140 @@ export SONIOX_API_KEY=your_key_here
 ```
 Get key from: https://console.soniox.com
 
-## Node.js SDK (Our Choice)
+---
 
-```bash
-npm install @soniox/node
-```
-
-### STT — Real-time Streaming (actual working code from Soniox GitHub)
-```javascript
-import { SonioxNodeClient } from '@soniox/node';
-
-const client = new SonioxNodeClient({
-  api_key: process.env.SONIOX_API_KEY,
-});
-
-const session = client.realtime.stt({
-  model: 'stt-rt-v4',
-  audio_format: 'pcm_s16le',   // PCM 16-bit signed little-endian
-  sample_rate: 16000,           // 16kHz
-  num_channels: 1,              // mono
-  enable_endpoint_detection: true,   // detects when user stops speaking → trigger LLM
-  language_hints: ['pa', 'en'],      // Punjabi + English
-});
-
-// Events
-session.on('result', (result) => {
-  const text = result.tokens.map(t => t.text).join('');
-  console.log('transcript:', text);
-});
-
-session.on('endpoint', () => {
-  // User has FINISHED speaking → send transcript to LLM now
-  console.log('User done speaking → call LLM');
-});
-
-session.on('error', (err) => console.error(err));
-
-// Connect and stream audio
-await session.connect();
-session.sendAudio(audioChunk);  // call this in a loop as audio arrives
-
-// Control commands
-session.pause();    // pause listening (while agent is speaking)
-session.resume();   // resume listening (after agent finishes)
-await session.finish();  // end session
-```
-
-### TTS — Real-time Streaming
-```javascript
-// REST-based TTS (simple)
-const bytes = await client.tts.generateToFile('output.wav', {
-  text: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ ਤੁਹਾਡੀ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ।',
-  voice: 'Adrian',         // voice ID — check Soniox console for Punjabi voices
-  model: 'tts-rt-v1',
-  language: 'pa',          // Punjabi
-  audio_format: 'wav',
-});
-
-// WebSocket TTS (streaming — for lower latency)
-// Use wss://tts-rt.soniox.com/tts-websocket directly
-```
-
-### Key Session Events
-| Event | When it fires | What to do |
-|-------|--------------|------------|
-| `result` | Partial/full transcript arrives | Display interim, buffer final |
-| `endpoint` | User finished speaking | → Send transcript to LLM |
-| `disconnected` | Connection dropped | Reconnect or end call |
-| `error` | Something broke | Log + handle gracefully |
-
-### Key Session Methods
-| Method | What it does |
-|--------|-------------|
-| `session.connect()` | Open WebSocket to Soniox |
-| `session.sendAudio(buffer)` | Send audio chunk (call in loop) |
-| `session.pause()` | Stop processing audio (agent speaking) |
-| `session.resume()` | Resume listening (agent done speaking) |
-| `session.finalize()` | Force end-of-utterance detection |
-| `session.finish()` | End session cleanly |
-| `session.close()` | Close immediately |
-
-## Python SDK (alternative)
+## Python SDK — What We Use
 
 ```bash
 pip install soniox
 ```
 
-Basic pattern same as Node — uses `AsyncSonioxClient`, same events and methods.
+The voice bot server (`server/`) uses the Python SDK via the `STTProcessor` and `TTSProcessor` processor classes (in `processors/stt.py` and `processors/tts.py`). You don't call the SDK directly — the processors wrap it.
 
-## Language Codes for Our Use Case
+### STT config (in `server/main.py`)
+```python
+STTProcessor(
+    api_key=SONIOX_API_KEY,
+    model="stt-rt-v4",
+    audio_format="mulaw",         # or "pcm_s16le" for browser
+    audio_sample_rate=8000,       # 8000 for Twilio, 16000 for browser
+    num_channels=1,
+    language_hints=["pa", "hi", "en"],   # Punjabi + Hindi + English
+    context={
+        "general": [{"key": "domain", "value": "restaurant"}],
+        "terms": ["Parkash Sweets", "Chole Bhatura", ...]  # all menu items
+    }
+)
+```
 
-| Language | Code |
-|----------|------|
-| Punjabi | `pa` |
-| English | `en` |
-| Hindi | `hi` |
+### TTS config (in `server/main.py`)
+```python
+DynamicTTSProcessor(
+    api_key=SONIOX_API_KEY,
+    api_host="wss://tts-rt.soniox.com/tts-websocket",
+    model="tts-rt-v1",
+    language="pa",        # updated dynamically by select_language tool
+    voice="Nina",         # updated dynamically by select_language tool
+    audio_format="pcm_s16le",
+    sample_rate=24000,
+)
+```
 
-## Key Features We'll Use
+### Opening greeting pre-generation (`twilio/generate_opening_greeting.py`)
+Direct WebSocket TTS call (no SDK wrapper):
+```python
+async with websockets.connect("wss://tts-rt.soniox.com/tts-websocket") as ws:
+    await ws.send(json.dumps({
+        "api_key": SONIOX_API_KEY,
+        "model": "tts-rt-v1",
+        "language": "en",
+        "voice": "Nina",
+        "audio_format": "pcm_s16le",
+        "sample_rate": 24000,
+        "stream_id": stream_id,
+    }))
+    await ws.send(json.dumps({"text": "Thank you for calling...", "text_end": False, "stream_id": stream_id}))
+    await ws.send(json.dumps({"text": "", "text_end": True, "stream_id": stream_id}))
+    # collect audio chunks → write WAV
+```
 
-- **Multilingual support** — customer can speak Punjabi or English, Soniox handles both
-- **Language hints** — tell Soniox which languages to expect (`["pa", "en"]`)
-- **Speaker diarization** — detect different speakers (useful for noisy environments)
-- **End-of-utterance detection** — know when customer is done speaking
+---
+
+## Language Codes We Use
+
+| Language | Code | STT hints |
+|----------|------|-----------|
+| Punjabi | `pa` | `["pa", "hi", "en"]` |
+| Hindi | `hi` | `["hi", "en"]` |
+| English | `en` | `["en"]` |
+
+### How language switching works at runtime
+1. Customer speaks → `select_language("punjabi")` tool called by LLM
+2. `state.tts_language = "pa"` and `state.tts_voice = "Nina"` updated
+3. `DynamicTTSProcessor` reads state at start of next TTS stream → automatic switch
+4. STT language hints are set once at connection time based on the initial language selection
+
+---
+
+## Voice Names
+
+Voice `Nina` is used for all three languages in our implementation.
+Check https://console.soniox.com for the full list of available voices per language.
+
+---
+
+## Audio Formats
+
+| Format | Code | Used where |
+|--------|------|-----------|
+| PCM 16-bit signed little-endian | `pcm_s16le` | Browser → server (STT in), server → browser (TTS out) |
+| µ-law 8kHz | `mulaw` | Twilio → bridge → server (STT in) |
+| PCM 24kHz | `pcm_s16le` | Server TTS output (default) |
+
+Twilio conversion (in `twilio/main.py`):
+```python
+# PCM 24kHz → mulaw 8kHz for Twilio playback
+pcm_8k = audioop.ratecv(pcm_24k, 2, 1, 24000, 8000, None)[0]
+ulaw   = audioop.lin2ulaw(pcm_8k, 2)
+```
+
+---
+
+## STT Models
+
+| Model | Notes |
+|-------|-------|
+| `stt-rt-v4` | Current — what we use |
+
+## TTS Models
+
+| Model | Notes |
+|-------|-------|
+| `tts-rt-v1` | Current — what we use |
+
+---
+
+## Key Features We Rely On
+
+- **Multilingual** — customer speaks Punjabi or English, Soniox handles both in one session
+- **Language hints** — `language_hints=["pa", "hi", "en"]` tells Soniox which scripts to expect
+- **STT context terms** — all 80+ menu item names passed so Soniox recognises food names correctly
+- **End-of-utterance detection** — built into STT processor, triggers LLM call
 - **Sub-200ms latency** — fast enough for natural phone conversation
+- **Streaming TTS** — audio chunks arrive as generation happens, first chunk plays before full text is ready
 
-## Token Conversion (for cost tracking)
-- 1 hour audio = ~30,000 tokens
-- 1 character = ~0.3 tokens
+---
+
+## Token / Cost Reference
+
+- 1 hour audio (STT) ≈ 30,000 tokens ≈ $0.12
+- 1 hour audio (TTS) ≈ $0.70
+- Per 5-min call (Soniox + GPT-4o-mini + Twilio) ≈ $0.10 total
+
+---
 
 ## Docs & Resources
+
 - Main docs: https://soniox.com/docs
 - Console: https://console.soniox.com
 - GitHub examples: https://github.com/soniox/soniox_examples
