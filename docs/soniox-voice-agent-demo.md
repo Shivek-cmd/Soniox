@@ -48,7 +48,7 @@ Python WebSocket server. Handles the full STT → LLM → TTS pipeline. Accepts 
 
 **Query params accepted:**
 ```
-?language=pa&voice=Nina
+?language=pa&voice=Maya
 &audio_in_format=mulaw&audio_in_sample_rate=8000&audio_in_num_channels=1
 &skip_opening_greeting=true
 &caller_phone=+16131234567
@@ -256,7 +256,7 @@ N8N_WEBHOOK_URL=...              # optional — order webhook
 PORT=5050
 SONIOX_VOICE_BOT_WS_URL=ws://localhost:8765
 VOICE_BOT_LANGUAGE=pa            # pa / hi / en (default language for Twilio calls)
-VOICE_BOT_VOICE=Nina
+VOICE_BOT_VOICE=Maya
 TWILIO_ACCOUNT_SID=...
 TWILIO_AUTH_TOKEN=...
 OWNER_PHONE_NUMBER=+1...         # where to transfer calls

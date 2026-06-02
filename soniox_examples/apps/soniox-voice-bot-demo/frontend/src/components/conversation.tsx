@@ -54,7 +54,7 @@ export function Conversation() {
     prepareAudioPlayer();
     const url = new URL(WS_URL);
     url.searchParams.append("language", lang);
-    url.searchParams.append("voice", "Nina");
+    url.searchParams.append("voice", "Maya");
     const sock = new WebSocket(url.toString());
     ws.current = sock;
     sock.onopen  = () => { setStatus("listening"); startMicrophoneStream(); };

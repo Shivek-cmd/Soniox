@@ -47,7 +47,7 @@ DynamicTTSProcessor(
     api_host="wss://tts-rt.soniox.com/tts-websocket",
     model="tts-rt-v1",
     language="pa",        # updated dynamically by select_language tool
-    voice="Nina",         # updated dynamically by select_language tool
+    voice="Maya",         # updated dynamically by select_language tool
     audio_format="pcm_s16le",
     sample_rate=24000,
 )
@@ -61,7 +61,7 @@ async with websockets.connect("wss://tts-rt.soniox.com/tts-websocket") as ws:
         "api_key": SONIOX_API_KEY,
         "model": "tts-rt-v1",
         "language": "en",
-        "voice": "Nina",
+        "voice": "Maya",
         "audio_format": "pcm_s16le",
         "sample_rate": 24000,
         "stream_id": stream_id,
@@ -83,7 +83,7 @@ async with websockets.connect("wss://tts-rt.soniox.com/tts-websocket") as ws:
 
 ### How language switching works at runtime
 1. Customer speaks → `select_language("punjabi")` tool called by LLM
-2. `state.tts_language = "pa"` and `state.tts_voice = "Nina"` updated
+2. `state.tts_language = "pa"` and `state.tts_voice = "Maya"` updated
 3. `DynamicTTSProcessor` reads state at start of next TTS stream → automatic switch
 4. STT language hints are set once at connection time based on the initial language selection
 
@@ -91,7 +91,7 @@ async with websockets.connect("wss://tts-rt.soniox.com/tts-websocket") as ws:
 
 ## Voice Names
 
-Voice `Nina` is used for all three languages in our implementation.
+Voice `Maya` is used for all three languages in our implementation.
 Check https://console.soniox.com for the full list of available voices per language.
 
 ---
