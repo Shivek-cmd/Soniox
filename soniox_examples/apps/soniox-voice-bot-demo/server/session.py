@@ -10,6 +10,7 @@ from messages import (
     LLMChunkMessage,
     Message,
     MetricsMessage,
+    OrderConfirmedMessage,
     SessionStartMessage,
     TranscriptionMessage,
     TransferCallMessage,
@@ -144,6 +145,9 @@ class Session:
                 await self.send_message_queue.put(message.json())
 
             if isinstance(message, TransferCallMessage):
+                await self.send_message_queue.put(message.json())
+
+            if isinstance(message, OrderConfirmedMessage):
                 await self.send_message_queue.put(message.json())
 
             if isinstance(message, ErrorMessage):
