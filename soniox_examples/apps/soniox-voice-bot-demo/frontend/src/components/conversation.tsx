@@ -27,7 +27,7 @@ const LANGUAGES = [
 export function Conversation() {
   const ws = useRef<WebSocket | null>(null);
 
-  const [lang, setLang]                     = useState("pa");
+  const [lang, setLang]                     = useState("en");
   const [messages, setMessages]             = useState<Message[]>([]);
   const [confirmedOrder, setConfirmedOrder] = useState<OrderConfirmed | null>(null);
   const [status, setStatus]                 = useState<CallStatus>("idle");
