@@ -219,6 +219,80 @@ const MENU: MenuEntry[] = [
   { name: "Mango Faluda",    terms: ["mango faluda", "faluda", "falooda"],                  price: 8.5  },
 ];
 
+export interface ConversationDetails {
+  name: string | null;
+  phone: string | null;
+  orderType: string | null;   // "pickup" | "delivery" | "dine_in"
+  instructions: string | null;
+  isConfirmed: boolean;
+}
+
+/**
+ * Real-time extraction of order details from the ongoing conversation.
+ * Used to populate the order card before/instead of the server order_confirmed message.
+ */
+export function parseConversationDetails(messages: { type: string; text?: string; final_text?: string }[]): ConversationDetails {
+  const botTexts  = messages.filter(m => m.type === "llm_response").map(m => m.text ?? "");
+  const userTexts = messages.filter(m => m.type === "transcription").map(m => m.final_text ?? "");
+
+  const botFull  = botTexts.join(" ");
+  const botLower = botFull.toLowerCase();
+  const userFull = userTexts.join(" ");
+  const allLower = botLower + " " + userFull.toLowerCase();
+
+  // ── Name ──────────────────────────────────────────────────────────────
+  let name: string | null = null;
+
+  // "Thank you, Shivek!" or "Thank you, Shivek."
+  const m1 = botFull.match(/[Tt]hank you,?\s+([A-Z][a-z]+)[!.,\s]/);
+  if (m1) name = m1[1];
+
+  if (!name) {
+    // "under the name Shivek" (in recap)
+    const m2 = botFull.match(/under the name\s+([A-Z][a-z]+)/i);
+    if (m2) name = m2[1];
+  }
+
+  if (!name) {
+    // "for Shivek." at end of recap line
+    const m3 = botFull.match(/,\s+for\s+([A-Z][a-z]+)[.,!]/);
+    if (m3) name = m3[1];
+  }
+
+  // ── Phone ─────────────────────────────────────────────────────────────
+  let phone: string | null = null;
+
+  // User gave 10 consecutive digits
+  const phoneDigits = userFull.match(/\b(\d{10})\b/);
+  if (phoneDigits) {
+    phone = phoneDigits[1];
+  } else {
+    // Bot read back digits: "9-4-1, 3-7-5, 2-6-8-8" → strip non-digits
+    const botPhoneMatch = botFull.match(/\b(\d[-–\s,]+\d[-–\s,]+\d[-–\s,]+\d[-–\s,]+\d[-–\s,]+\d[-–\s,]+\d[-–\s,]+\d[-–\s,]+\d[-–\s,]+\d)\b/);
+    if (botPhoneMatch) {
+      phone = botPhoneMatch[1].replace(/[^0-9]/g, "");
+    }
+  }
+
+  // ── Order type ────────────────────────────────────────────────────────
+  let orderType: string | null = null;
+  if (allLower.includes("pickup"))                                   orderType = "pickup";
+  else if (allLower.includes("delivery"))                            orderType = "delivery";
+  else if (allLower.includes("dine-in") || allLower.includes("dine in")) orderType = "dine_in";
+
+  // ── Special instructions ──────────────────────────────────────────────
+  let instructions: string | null = null;
+
+  // "Got it! Less oily for your Aloo Samosa." – capture what follows "Got it"
+  const gotIt = botFull.match(/Got it[!,.]?\s+(.+?)(?:\.|What|Can I|Anything|And can|Your name)/i);
+  if (gotIt) instructions = gotIt[1].trim();
+
+  // ── Confirmed? ────────────────────────────────────────────────────────
+  const isConfirmed = botLower.includes("order confirmed");
+
+  return { name, phone, orderType, instructions, isConfirmed };
+}
+
 export function parseOrderFromBotMessages(botTexts: string[]): DetectedOrderItem[] {
   const allText = botTexts.join(" ").toLowerCase();
   const detected = new Map<string, DetectedOrderItem>();

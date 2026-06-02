@@ -11,7 +11,7 @@ import { useAudioChunkPlayer } from "../hooks/useAudioChunkPlayer";
 import { useMicrophone } from "../hooks/useMicrophone";
 import { ChatMessage } from "./renderer";
 import { MenuPanel } from "./MenuPanel";
-import { parseOrderFromBotMessages } from "../utils/menuData";
+import { parseOrderFromBotMessages, parseConversationDetails } from "../utils/menuData";
 
 const WS_URL = import.meta.env.VITE_SONIOX_VOICE_BOT_WS_URL;
 
@@ -200,22 +200,47 @@ function OrderColumn({
     );
   }, [messages, confirmedOrder]);
 
+  // Real-time: name, phone, type, instructions from conversation
+  const details = useMemo(
+    () => parseConversationDetails(messages as { type: string; text?: string; final_text?: string }[]),
+    [messages]
+  );
+
+  // Fallback receipt: bot said "order confirmed" but server message never arrived
+  const localOrder = useMemo<OrderConfirmed | null>(() => {
+    if (!details.isConfirmed || confirmedOrder || detected.length === 0) return null;
+    const ts = new Date();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return {
+      type: "order_confirmed",
+      order_id: `PS-${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}`,
+      customer_name: details.name ?? "—",
+      phone_number:  details.phone ?? "—",
+      order_type:    details.orderType ?? "pickup",
+      items:         detected.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
+      total_amount:  detected.reduce((s, i) => s + i.price * i.quantity, 0),
+      wait_time:     "20–30 minutes",
+      special_instructions: details.instructions ?? "",
+    };
+  }, [details, confirmedOrder, detected]);
+
+  const effectiveOrder = confirmedOrder ?? localOrder;
+
+  const badgeLabel = effectiveOrder
+    ? "Confirmed ✓"
+    : detected.length > 0
+    ? `${detected.length} item${detected.length !== 1 ? "s" : ""}`
+    : null;
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div
-        className="flex-none flex items-center justify-between px-4 py-3 border-b"
-        style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-      >
-        <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--text-dim)" }}>
-          Your Order
-        </span>
-        {(detected.length > 0 || confirmedOrder) && (
-          <span
-            className="text-xs px-2 py-0.5 rounded-full font-medium"
-            style={{ background: confirmedOrder ? "rgba(34,197,94,0.15)" : "rgba(245,158,11,0.15)", color: confirmedOrder ? "#4ade80" : "var(--accent)" }}
-          >
-            {confirmedOrder ? "Confirmed" : `${detected.length} item${detected.length !== 1 ? "s" : ""}`}
+      <div className="flex-none flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+        <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--text-dim)" }}>Your Order</span>
+        {badgeLabel && (
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+            style={{ background: effectiveOrder ? "rgba(34,197,94,0.15)" : "rgba(245,158,11,0.15)", color: effectiveOrder ? "#4ade80" : "var(--accent)" }}>
+            {badgeLabel}
           </span>
         )}
       </div>
@@ -224,7 +249,7 @@ function OrderColumn({
       <div className="flex-1 overflow-y-auto">
 
         {/* Idle */}
-        {!isActive && !confirmedOrder && (
+        {!isActive && !effectiveOrder && (
           <div className="h-full flex flex-col items-center justify-center px-4 gap-3 select-none">
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "var(--surface-raised)" }}>
               <BagSvg />
@@ -235,50 +260,70 @@ function OrderColumn({
           </div>
         )}
 
-        {/* Active, no items yet */}
-        {isActive && !confirmedOrder && detected.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center gap-3">
-            <div className="flex gap-1.5">
-              <span className="w-2 h-2 rounded-full dot-1" style={{ background: "var(--accent)" }} />
-              <span className="w-2 h-2 rounded-full dot-2" style={{ background: "var(--accent)" }} />
-              <span className="w-2 h-2 rounded-full dot-3" style={{ background: "var(--accent)" }} />
-            </div>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Taking your order…</p>
-          </div>
-        )}
-
-        {/* Items detected — running order card */}
-        {!confirmedOrder && detected.length > 0 && (
-          <div className="px-3 py-3">
-            <div className="rounded-xl overflow-hidden" style={{ border: "1px dashed rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.04)" }}>
-              <div className="px-3 py-2 border-b" style={{ borderColor: "rgba(245,158,11,0.2)" }}>
-                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--accent)" }}>Building Order…</p>
+        {/* Active — building order (real-time details) */}
+        {isActive && !effectiveOrder && (
+          <div className="px-3 py-3 flex flex-col gap-2">
+            {detected.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 gap-3">
+                <div className="flex gap-1.5">
+                  <span className="w-2 h-2 rounded-full dot-1" style={{ background: "var(--accent)" }} />
+                  <span className="w-2 h-2 rounded-full dot-2" style={{ background: "var(--accent)" }} />
+                  <span className="w-2 h-2 rounded-full dot-3" style={{ background: "var(--accent)" }} />
+                </div>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>Taking your order…</p>
               </div>
-              <div className="px-3 py-2 flex flex-col gap-1.5">
-                {detected.map((item) => (
-                  <div key={item.name} className="flex justify-between gap-2">
-                    <span className="text-xs truncate flex-1" style={{ color: "var(--text-muted)" }}>{item.quantity}× {item.name}</span>
-                    <span className="text-xs font-semibold flex-none" style={{ color: "var(--accent)" }}>${(item.price * item.quantity).toFixed(2)}</span>
+            ) : (
+              <div className="rounded-xl overflow-hidden" style={{ border: "1px dashed rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.03)" }}>
+                <div className="px-3 py-2 border-b" style={{ borderColor: "rgba(245,158,11,0.2)" }}>
+                  <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--accent)" }}>Building Order…</p>
+                </div>
+                <div className="px-3 py-2 flex flex-col gap-1.5">
+                  {detected.map((item) => (
+                    <div key={item.name} className="flex justify-between gap-2">
+                      <span className="text-xs truncate flex-1" style={{ color: "var(--text-muted)" }}>{item.quantity}× {item.name}</span>
+                      <span className="text-xs font-semibold flex-none" style={{ color: "var(--accent)" }}>${(item.price * item.quantity).toFixed(2)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-2 mt-1 border-t" style={{ borderColor: "rgba(245,158,11,0.15)" }}>
+                    <span className="text-xs" style={{ color: "var(--text-dim)" }}>Est. subtotal</span>
+                    <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>
+                      ${detected.reduce((s, i) => s + i.price * i.quantity, 0).toFixed(2)}
+                    </span>
                   </div>
-                ))}
-                <div className="flex justify-between pt-2 mt-1 border-t" style={{ borderColor: "rgba(245,158,11,0.2)" }}>
-                  <span className="text-xs" style={{ color: "var(--text-dim)" }}>Est. subtotal</span>
-                  <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>
-                    ${detected.reduce((s, i) => s + i.price * i.quantity, 0).toFixed(2)}
-                  </span>
                 </div>
               </div>
-            </div>
-            <p className="text-xs mt-2 text-center" style={{ color: "var(--text-dim)" }}>Final amount confirmed on placement</p>
+            )}
+
+            {/* Real-time captured details */}
+            {(details.name || details.phone || details.orderType || details.instructions) && (
+              <div className="rounded-xl px-3 py-2.5 flex flex-col gap-1.5" style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}>
+                {details.name && <DetailRow label="Name"  value={details.name} />}
+                {details.phone && <DetailRow label="Phone" value={details.phone} mono />}
+                {details.orderType && (
+                  <DetailRow label="Type"
+                    value={details.orderType === "dine_in" ? "Dine-in" : details.orderType.charAt(0).toUpperCase() + details.orderType.slice(1)}
+                    accent />
+                )}
+                {details.instructions && <DetailRow label="Notes" value={details.instructions} />}
+              </div>
+            )}
           </div>
         )}
 
         {/* Confirmed — full receipt */}
-        {confirmedOrder && (
-          <ReceiptCard order={confirmedOrder} />
-        )}
-
+        {effectiveOrder && <ReceiptCard order={effectiveOrder} />}
       </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value, mono = false, accent = false }: { label: string; value: string; mono?: boolean; accent?: boolean }) {
+  return (
+    <div className="flex justify-between gap-2 items-start">
+      <span className="text-xs flex-none" style={{ color: "var(--text-dim)" }}>{label}</span>
+      <span className="text-xs font-medium text-right" style={{ color: accent ? "var(--accent)" : "var(--text)", fontFamily: mono ? "monospace" : undefined }}>
+        {value}
+      </span>
     </div>
   );
 }

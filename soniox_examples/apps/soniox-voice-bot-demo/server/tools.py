@@ -653,10 +653,12 @@ async def place_order(
         "success": True,
         "order_id": order_id,
         "customer_name": customer_name,
+        "phone_number": phone_number,
         "order_type": order_type,
         "items": items,
         "total_amount": total_amount,
         "wait_time": wait_time,
+        "special_instructions": special_instructions,
         "message": (
             f"Order {order_id} confirmed. Say the words 'order confirmed' exactly. "
             f"Say 'Wait time {wait_time}' exactly. Never translate confirmed into "
