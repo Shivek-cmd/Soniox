@@ -91,7 +91,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       { name: "Super Veggie Sandwich",    price: 6.99, description: "Red onion, capsicum, corn, cheese & spicy mayo" },
       { name: "Sweet Corn Sandwich",      price: 6.99, description: "Sweet corn, cheese, tangy sauce & oregano" },
       { name: "Paneer Mayo Sandwich",     price: 7.99, description: "Paneer, corn, capsicum, carrot & spicy mayo" },
-      { name: "Coleslaw Sandwich Kids",   price: 5.00, description: "White bread with eggless mayo, carrots & cabbage" },
+      { name: "Coleslaw Sandwich - Kids Size", price: 5.00, description: "White bread with eggless mayo, carrots & cabbage" },
     ],
   },
   {
@@ -151,8 +151,8 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       { name: "Extra Puri",         price: 1.50 },
       { name: "Choley - 8 oz",      price: 2.99 },
       { name: "Mix Pickle - 2 oz",  price: 1.49 },
-      { name: "Tamarind Sauce",     price: 1.00 },
-      { name: "Mint Sauce",         price: 1.50 },
+      { name: "Tamarind Sauce - 2 oz", price: 1.00 },
+      { name: "Mint Sauce - 2 oz",    price: 1.50 },
     ],
   },
 ];
@@ -166,57 +166,99 @@ interface MenuEntry {
 }
 
 const MENU: MenuEntry[] = [
-  { name: "Aloo Samosa",     terms: ["aloo samosa", "samosa"],                              price: 3.0  },
-  { name: "Noodle Samosa",   terms: ["noodle samosa"],                                      price: 4.5  },
-  { name: "Chole Bhatura",   terms: ["chole bhatura", "chole bhature", "choley bhatura"],   price: 7.99 },
-  { name: "Choley Puri",     terms: ["choley puri", "chole puri"],                          price: 7.99 },
-  { name: "Aloo Puri",       terms: ["aloo puri"],                                          price: 7.99 },
-  { name: "Chaat Papdi",     terms: ["chaat papdi", "papdi chaat", "papri chaat"],          price: 5.99 },
-  { name: "Dahi Bhalla",     terms: ["dahi bhalla"],                                        price: 5.99 },
-  { name: "Samosa Choley",   terms: ["samosa choley", "samosa chole", "samosa chaat"],      price: 6.5  },
-  { name: "Tawa Tikki Chaat",  terms: ["tawa tikki chaat", "tikki chaat"],                  price: 6.0  },
-  { name: "Tawa Tikki Choley", terms: ["tawa tikki choley", "tikki choley"],                price: 7.5  },
-  { name: "Mix Veg Pakora",  terms: ["mix veg pakora", "veg pakora"],                       price: 8.5  },
-  { name: "Paneer Pakora",   terms: ["paneer pakora"],                                      price: 11.5 },
-  { name: "Gobi Pakora",     terms: ["gobi pakora"],                                        price: 10.5 },
-  { name: "Baingan Pakora",  terms: ["baingan pakora"],                                     price: 8.5  },
-  { name: "Mirchi Pakora",   terms: ["mirchi pakora"],                                      price: 10.5 },
-  { name: "Hara Bara Kabab", terms: ["hara bara kabab", "hara bhara"],                      price: 10.5 },
-  { name: "Dahi Kabab",      terms: ["dahi kabab"],                                         price: 9.0  },
-  { name: "Mushroom Delux",  terms: ["mushroom delux", "mushroom"],                         price: 9.0  },
-  { name: "Aloo Cutlet",     terms: ["aloo cutlet"],                                        price: 10.5 },
-  { name: "Parkash Platter", terms: ["parkash platter", "platter"],                         price: 15.99},
-  { name: "Aloo Finger",     terms: ["aloo finger"],                                        price: 8.5  },
-  { name: "Spring Roll",     terms: ["spring roll"],                                        price: 8.0  },
-  { name: "Bread Roll",      terms: ["bread roll"],                                         price: 3.0  },
-  { name: "Aloo Bread Pakora",        terms: ["aloo bread pakora"],                         price: 3.0  },
-  { name: "Paneer Aloo Bread Pakora", terms: ["paneer aloo bread pakora"],                  price: 5.0  },
-  { name: "Aloo Tikki Burger",  terms: ["aloo tikki burger"],                               price: 6.5  },
-  { name: "Noodle Burger",      terms: ["noodle burger"],                                   price: 7.5  },
-  { name: "Paneer Tikki Burger",terms: ["paneer tikki burger"],                             price: 8.5  },
-  { name: "Grilled Cheese Sandwich", terms: ["grilled cheese sandwich", "grilled cheese"],  price: 5.5  },
-  { name: "Super Veggie Sandwich",   terms: ["super veggie sandwich", "veggie sandwich"],   price: 6.99 },
-  { name: "Sweet Corn Sandwich",     terms: ["sweet corn sandwich"],                        price: 6.99 },
-  { name: "Paneer Mayo Sandwich",    terms: ["paneer mayo sandwich"],                       price: 7.99 },
-  { name: "Aloo Parantha",   terms: ["aloo parantha", "aloo paratha"],                      price: 4.0  },
-  { name: "Gobi Parantha",   terms: ["gobi parantha", "gobi paratha"],                      price: 4.5  },
-  { name: "Muli Parantha",   terms: ["muli parantha", "mooli parantha", "muli paratha"],    price: 4.5  },
-  { name: "Paneer Parantha", terms: ["paneer parantha", "paneer paratha"],                  price: 4.99 },
-  { name: "Mix Parantha",    terms: ["mix parantha", "mix paratha"],                        price: 4.99 },
-  { name: "Rasmalai",        terms: ["rasmalai", "kesar rasmalai"],                         price: 4.0  },
-  { name: "Gulab Jamun",     terms: ["gulab jamun"],                                        price: 3.0  },
-  { name: "Rasgulla",        terms: ["rasgulla"],                                           price: 3.0  },
-  { name: "Moong Dal Halwa", terms: ["moong dal halwa"],                                    price: 5.5  },
-  { name: "Gajrela",         terms: ["gajrela", "gajar halwa"],                             price: 4.5  },
-  { name: "Mango Lassi",     terms: ["mango lassi"],                                        price: 4.99 },
-  { name: "Sweet Lassi",     terms: ["sweet lassi"],                                        price: 4.49 },
-  { name: "Salty Lassi",     terms: ["salty lassi"],                                        price: 4.49 },
-  { name: "Masala Chai",     terms: ["masala chai"],                                        price: 1.99 },
-  { name: "Elachi Chai",     terms: ["elachi chai"],                                        price: 2.99 },
-  { name: "Chai",            terms: ["chai"],                                               price: 1.99 },
-  { name: "Badam Milk",      terms: ["badam milk"],                                         price: 5.99 },
-  { name: "Mango Shake",     terms: ["mango shake"],                                        price: 5.5  },
-  { name: "Mango Faluda",    terms: ["mango faluda", "faluda", "falooda"],                  price: 8.5  },
+  // ── Samosa ──────────────────────────────────────────────────────────────────
+  { name: "Aloo Samosa (2 pcs)",   terms: ["aloo samosa", "samosa", "aloo samosay"],        price: 3.0  },
+  { name: "Noodle Samosa (2 pcs)", terms: ["noodle samosa"],                                price: 4.5  },
+
+  // ── Parkash Classics ────────────────────────────────────────────────────────
+  { name: "Chole Bhatura",  terms: ["chole bhatura", "chole bhature", "choley bhatura", "chhole bhatura"], price: 7.99 },
+  { name: "Choley Puri",    terms: ["choley puri", "chole puri"],                           price: 7.99 },
+  { name: "Aloo Puri",      terms: ["aloo puri"],                                           price: 7.99 },
+
+  // ── Chaat ───────────────────────────────────────────────────────────────────
+  { name: "Chaat Papdi",          terms: ["chaat papdi", "papdi chaat", "papri chaat", "chaat papri"],    price: 5.99 },
+  { name: "Dahi Bhalla",          terms: ["dahi bhalla"],                                  price: 5.99 },
+  { name: "Samosa Choley",        terms: ["samosa choley", "samosa chole", "samosa chaat"],price: 6.5  },
+  { name: "Tawa Tikki Chaat",     terms: ["tawa tikki chaat", "tikki chaat"],              price: 6.0  },
+  { name: "Tawa Tikki Choley",    terms: ["tawa tikki choley", "tikki choley"],            price: 7.5  },
+  { name: "Aloo Besan Tikki Chaat", terms: ["aloo besan tikki chaat", "besan tikki chaat", "aloo tikki chaat"], price: 5.0 },
+
+  // ── Pakora ──────────────────────────────────────────────────────────────────
+  { name: "Mix Veg Pakora",    terms: ["mix veg pakora", "veg pakora", "mix pakora", "mixed pakora"],   price: 8.5  },
+  { name: "Paneer Pakora",     terms: ["paneer pakora", "paneer pakoda", "paner pakora"],               price: 11.5 },
+  { name: "Gobi Pakora",       terms: ["gobi pakora", "cauliflower pakora"],                            price: 10.5 },
+  { name: "Baingan Pakora",    terms: ["baingan pakora"],                                              price: 8.5  },
+  { name: "Mirchi Pakora",     terms: ["mirchi pakora"],                                               price: 10.5 },
+  { name: "Hara Bara Kabab",   terms: ["hara bara kabab", "hara bhara kabab", "hara bhara", "hara bara"], price: 10.5 },
+  { name: "Dahi Kabab",        terms: ["dahi kabab"],                                                  price: 9.0  },
+  { name: "Mushroom Delux",    terms: ["mushroom delux", "mushroom", "mushroom pakora", "mushrooms"],  price: 9.0  },
+  { name: "Aloo Cutlet",       terms: ["aloo cutlet", "cutlet"],                                       price: 10.5 },
+  { name: "Parkash Platter",   terms: ["parkash platter", "platter"],                                  price: 15.99},
+  { name: "Aloo Finger",       terms: ["aloo finger", "aloo fingers", "potato fingers"],               price: 8.5  },
+  { name: "Spring Roll",       terms: ["spring roll"],                                                 price: 8.0  },
+  { name: "Aloo Besan Tikki (2 pcs)", terms: ["aloo besan tikki", "besan tikki"],                     price: 3.0  },
+  { name: "Shimla Mirch Pakora",      terms: ["shimla mirch pakora", "shimla mirch"],                  price: 5.0  },
+  { name: "Tawa Tikki (2 pcs)",       terms: ["tawa tikki"],                                           price: 4.0  },
+
+  // ── Bread Pakora ────────────────────────────────────────────────────────────
+  { name: "Aloo Bread Pakora",        terms: ["aloo bread pakora", "aloo bread"],          price: 3.0  },
+  { name: "Paneer Aloo Bread Pakora", terms: ["paneer aloo bread pakora", "paneer bread pakora", "paneer aloo bread", "paneer bread"], price: 5.0 },
+  { name: "Bread Roll",               terms: ["bread roll"],                               price: 3.0  },
+
+  // ── Burgers & Sandwiches ────────────────────────────────────────────────────
+  { name: "Aloo Tikki Burger",         terms: ["aloo tikki burger", "aloo burger", "tikki burger"],    price: 6.5  },
+  { name: "Noodle Burger",             terms: ["noodle burger"],                           price: 7.5  },
+  { name: "Paneer Tikki Burger",       terms: ["paneer tikki burger", "paneer burger"],    price: 8.5  },
+  { name: "Grilled Cheese Sandwich",   terms: ["grilled cheese sandwich", "grilled cheese", "cheese sandwich"], price: 5.5 },
+  { name: "Super Veggie Sandwich",     terms: ["super veggie sandwich", "veggie sandwich", "veg sandwich"], price: 6.99 },
+  { name: "Sweet Corn Sandwich",       terms: ["sweet corn sandwich", "corn sandwich"],    price: 6.99 },
+  { name: "Paneer Mayo Sandwich",      terms: ["paneer mayo sandwich", "paneer mayo", "paneer sandwich"], price: 7.99 },
+  { name: "Coleslaw Sandwich - Kids Size", terms: ["coleslaw sandwich", "kids sandwich"], price: 5.0  },
+
+  // ── Parantha ────────────────────────────────────────────────────────────────
+  { name: "Aloo Parantha",   terms: ["aloo parantha", "aloo paratha"],                     price: 4.0  },
+  { name: "Gobi Parantha",   terms: ["gobi parantha", "gobi paratha"],                     price: 4.5  },
+  { name: "Muli Parantha",   terms: ["muli parantha", "mooli parantha", "muli paratha", "mooli paratha"], price: 4.5 },
+  { name: "Paneer Parantha", terms: ["paneer parantha", "paneer paratha"],                 price: 4.99 },
+  { name: "Mix Parantha",    terms: ["mix parantha", "mix paratha"],                       price: 4.99 },
+
+  // ── Desserts ────────────────────────────────────────────────────────────────
+  { name: "Rasmalai (2 pcs)",          terms: ["rasmalai"],                                price: 4.0  },
+  { name: "Kesar Rasmalai (6 pcs)",    terms: ["kesar rasmalai", "saffron rasmalai"],       price: 5.99 },
+  { name: "Garam Gulab Jamun (2 pcs)", terms: ["gulab jamun", "garam gulab jamun"],         price: 3.0  },
+  { name: "Spongey Rasgulla (2 pcs)",  terms: ["rasgulla", "spongey rasgulla"],             price: 3.0  },
+  { name: "Moong Dal Halwa - 8 oz",    terms: ["moong dal halwa", "dal halwa"],             price: 5.5  },
+  { name: "Garam Gajrela - 8 oz",      terms: ["gajrela", "garam gajrela", "gajar halwa", "gajar ka halwa", "carrot halwa"], price: 4.5 },
+
+  // ── Beverages ───────────────────────────────────────────────────────────────
+  { name: "Mango Lassi",         terms: ["mango lassi"],                                   price: 4.99 },
+  { name: "Sweet Lassi",         terms: ["sweet lassi"],                                   price: 4.49 },
+  { name: "Salty Lassi",         terms: ["salty lassi", "namkeen lassi", "salt lassi"],    price: 4.49 },
+  { name: "Masala Chai",         terms: ["masala chai", "chai", "tea"],                    price: 1.99 },
+  { name: "Elachi Chai",         terms: ["elachi chai", "cardamom chai"],                  price: 2.99 },
+  { name: "Gur Chai",            terms: ["gur chai", "jaggery chai"],                      price: 2.99 },
+  { name: "Dudh Patti",          terms: ["dudh patti", "doodh patti"],                     price: 2.99 },
+  { name: "Coffee - Indian Style", terms: ["coffee", "indian coffee"],                     price: 2.99 },
+  { name: "Badam Milk",          terms: ["badam milk", "almond milk"],                     price: 5.99 },
+  { name: "Mango Shake",         terms: ["mango shake"],                                   price: 5.5  },
+  { name: "Strawberry Shake",    terms: ["strawberry shake"],                              price: 5.5  },
+  { name: "Oreo Shake",          terms: ["oreo shake"],                                    price: 5.5  },
+  { name: "Chocolate Shake",     terms: ["chocolate shake", "choco shake"],                price: 5.5  },
+  { name: "Vanilla Shake",       terms: ["vanilla shake"],                                 price: 5.5  },
+  { name: "Mango Faluda",        terms: ["mango faluda", "faluda", "falooda"],              price: 8.5  },
+  { name: "Strawberry Faluda",   terms: ["strawberry faluda"],                             price: 8.5  },
+  { name: "Vanilla Faluda",      terms: ["vanilla faluda"],                                price: 8.5  },
+
+  // ── Sides ───────────────────────────────────────────────────────────────────
+  { name: "Butter (2 pcs)",    terms: ["butter"],                                          price: 0.99 },
+  { name: "Dahi - 8 oz",       terms: ["dahi", "yogurt"],                                  price: 2.99 },
+  { name: "Raita - 8 oz",      terms: ["raita"],                                           price: 2.99 },
+  { name: "Extra Bhatura",     terms: ["extra bhatura"],                                   price: 2.5  },
+  { name: "Extra Puri",        terms: ["extra puri"],                                      price: 1.5  },
+  { name: "Choley - 8 oz",     terms: ["choley", "chole"],                                 price: 2.99 },
+  { name: "Mix Pickle - 2 oz", terms: ["mix pickle", "pickle", "achar"],                   price: 1.49 },
+  { name: "Tamarind Sauce - 2 oz", terms: ["tamarind sauce", "imli sauce", "imli chutney"], price: 1.0 },
+  { name: "Mint Sauce - 2 oz", terms: ["mint sauce", "pudina sauce", "pudina chutney"],    price: 1.5  },
 ];
 
 export interface ConversationDetails {
@@ -300,13 +342,25 @@ const WORD_QTY: Record<string, number> = {
 
 // Sierra is recapping the full current order → clear and rebuild from this message
 const isRecapMessage = (text: string): boolean =>
+  // English
   /\bjust to confirm\b/i.test(text) ||
   /\byour order is\b/i.test(text) ||
   /\bso we have\b/i.test(text) ||
   /\bto recap\b/i.test(text) ||
   /\blet me confirm\b/i.test(text) ||
   /\bso you'?re (?:getting|ordering|having)\b/i.test(text) ||
-  /\bso that'?s\s+[1-9one|two|three]/i.test(text); // "so that's 1 X" or "so that's one X"
+  /\bso that'?s\s+[1-9one|two|three]/i.test(text) ||
+  // Punjabi (Gurmukhi) recap triggers
+  /ਤੁਹਾਡਾ order/.test(text) ||
+  /order ਵਿੱਚ/.test(text) ||
+  /ਦੱਸ ਦਿੰਦੀ ਹਾਂ/.test(text) ||
+  /confirm ਕਰਦੇ ਹਾਂ/.test(text) ||
+  /ਤਾਂ ਤੁਸੀਂ/.test(text) ||
+  // Hindi (Devanagari) recap triggers
+  /आपका order/.test(text) ||
+  /order में/.test(text) ||
+  /confirm करते हैं/.test(text) ||
+  /तो आपने/.test(text);
 
 // Sierra is removing an item
 const REMOVAL_RE = /\b(?:remov(?:e|ed|ing)|without|no more|cancel(?:l?ed)?|tak(?:en?|ing) (?:off|out)|drop(?:p(?:ed|ing))?|no longer)\b/i;
