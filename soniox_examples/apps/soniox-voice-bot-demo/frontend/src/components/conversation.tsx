@@ -11,6 +11,7 @@ import { useAudioChunkPlayer } from "../hooks/useAudioChunkPlayer";
 import { useMicrophone } from "../hooks/useMicrophone";
 import { ChatMessage } from "./renderer";
 import { MenuPanel } from "./MenuPanel";
+import { AvatarPanel } from "./AvatarPanel";
 import { parseOrderFromBotMessages, parseConversationDetails } from "../utils/menuData";
 
 const WS_URL = import.meta.env.VITE_SONIOX_VOICE_BOT_WS_URL;
@@ -90,13 +91,21 @@ export function Conversation() {
   return (
     <div className="h-full flex flex-col relative" style={{ background: "var(--bg)" }}>
 
-      {/* ── Three-column main area ──────────────────────── */}
+      {/* ── Four-column main area ───────────────────────── */}
       <div className="flex-1 flex overflow-hidden min-h-0">
 
-        {/* ① Chat */}
+        {/* ① Avatar */}
+        <div
+          className="flex-none border-r"
+          style={{ width: 220, borderColor: "var(--border)", background: "var(--bg)" }}
+        >
+          <AvatarPanel callStatus={status} />
+        </div>
+
+        {/* ② Chat */}
         <div
           className="flex flex-col border-r"
-          style={{ width: "38%", borderColor: "var(--border)", background: "var(--surface)" }}
+          style={{ flex: "0 0 30%", borderColor: "var(--border)", background: "var(--surface)" }}
         >
           {/* Status bar */}
           <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: "var(--border)" }}>
@@ -126,12 +135,12 @@ export function Conversation() {
           )}
         </div>
 
-        {/* ② Menu */}
-        <div className="flex flex-col border-r overflow-hidden" style={{ width: "34%", borderColor: "var(--border)" }}>
+        {/* ③ Menu */}
+        <div className="flex flex-col border-r overflow-hidden" style={{ flex: "0 0 28%", borderColor: "var(--border)" }}>
           <MenuPanel />
         </div>
 
-        {/* ③ Order */}
+        {/* ④ Order */}
         <div className="flex flex-col overflow-hidden" style={{ flex: 1 }}>
           <OrderColumn messages={messages} confirmedOrder={confirmedOrder} isActive={isActive} />
         </div>

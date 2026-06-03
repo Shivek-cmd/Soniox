@@ -1,0 +1,11 @@
+Drop your HeyGen exports here:
+
+  idle.mp4     — avatar standing still / subtle breathing (3-5 seconds, loopable)
+  talking.mp4  — avatar speaking (4-6 seconds, loopable)
+
+Both files must be:
+  - MP4 format
+  - Square (1:1 ratio) — 480x480 or 720x720 recommended
+  - Muted / no audio needed (audio comes from Soniox TTS)
+
+See HeyGen export instructions in the project docs.
