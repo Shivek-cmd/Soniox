@@ -293,24 +293,81 @@ export function parseConversationDetails(messages: { type: string; text?: string
   return { name, phone, orderType, instructions, isConfirmed };
 }
 
+const WORD_QTY: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5,
+  six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+};
+
+// Sierra is recapping the full current order → clear and rebuild from this message
+const isRecapMessage = (text: string): boolean =>
+  /\bjust to confirm\b/i.test(text) ||
+  /\byour order is\b/i.test(text) ||
+  /\bso we have\b/i.test(text) ||
+  /\bto recap\b/i.test(text) ||
+  /\blet me confirm\b/i.test(text) ||
+  /\bso you'?re (?:getting|ordering|having)\b/i.test(text) ||
+  /\bso that'?s\s+[1-9one|two|three]/i.test(text); // "so that's 1 X" or "so that's one X"
+
+// Sierra is removing an item
+const REMOVAL_RE = /\b(?:remov(?:e|ed|ing)|without|no more|cancel(?:l?ed)?|tak(?:en?|ing) (?:off|out)|drop(?:p(?:ed|ing))?|no longer)\b/i;
+
 export function parseOrderFromBotMessages(botTexts: string[]): DetectedOrderItem[] {
-  const allText = botTexts.join(" ").toLowerCase();
-  const detected = new Map<string, DetectedOrderItem>();
+  const order = new Map<string, DetectedOrderItem>();
 
-  for (const item of MENU) {
-    for (const term of item.terms) {
-      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const match = allText.match(new RegExp(`\\b([1-9]\\d?)\\s+${escaped}`));
-      if (!match) continue;
+  for (const text of botTexts) {
+    const lower = text.toLowerCase();
 
-      const quantity = parseInt(match[1]);
-      const existing = detected.get(item.name);
-      if (!existing || existing.quantity < quantity) {
-        detected.set(item.name, { name: item.name, quantity, price: item.price });
+    // On a full recap, clear everything and rebuild from scratch from this message only
+    if (isRecapMessage(text)) order.clear();
+
+    // Pre-compute "instead of X" removals before quantity matching
+    // e.g. "Instead of 1 Masala Chai, how about a Mango Lassi?" → delete Masala Chai
+    const insteadOfRemoved = new Set<string>();
+    const insteadMatch = lower.match(/\binstead of\s+([\w\s]+?)(?:,|\.|(?:\s+(?:how about|we|would|i'll|let)))/i);
+    if (insteadMatch) {
+      const phrase = insteadMatch[1].trim();
+      for (const item of MENU) {
+        if (item.terms.some(t => phrase.includes(t))) {
+          insteadOfRemoved.add(item.name);
+        }
       }
-      break;
+    }
+
+    const isRemoval = REMOVAL_RE.test(text);
+
+    for (const item of MENU) {
+      for (const term of item.terms) {
+        const esc = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+        // 1. Explicit removal: "remove the Mix Veg Pakora", "without Mix Veg Pakora"
+        if (isRemoval && new RegExp(
+          `\\b(?:remov(?:e|ed|ing)|without|no more|cancel(?:l?ed)?|tak(?:en?|ing) (?:off|out)|drop(?:p(?:ed|ing))?)\\s+(?:the\\s+)?${esc}\\b`, "i"
+        ).test(lower)) {
+          order.delete(item.name);
+          break;
+        }
+
+        // 2. Digit quantity: "2 Mix Veg Pakora", "1 Noodle Burger"
+        const digitMatch = lower.match(new RegExp(`\\b([1-9]\\d*)\\s+${esc}\\b`));
+        if (digitMatch) {
+          order.set(item.name, { name: item.name, quantity: parseInt(digitMatch[1]), price: item.price });
+          break;
+        }
+
+        // 3. Word quantity: "one Mix Veg Pakora", "two Chole Bhatura"
+        const wordMatch = lower.match(new RegExp(`\\b(one|two|three|four|five|six|seven|eight|nine|ten)\\s+${esc}\\b`));
+        if (wordMatch) {
+          order.set(item.name, { name: item.name, quantity: WORD_QTY[wordMatch[1]] ?? 1, price: item.price });
+          break;
+        }
+      }
+
+      // Apply "instead of X" removal — overrides any quantity match above
+      if (insteadOfRemoved.has(item.name)) {
+        order.delete(item.name);
+      }
     }
   }
 
-  return Array.from(detected.values());
+  return Array.from(order.values());
 }
