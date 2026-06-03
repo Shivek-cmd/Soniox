@@ -358,6 +358,213 @@ ITEM_ALIASES = {
     "pudina chutney": "Mint Sauce - 2 oz",
 }
 
+# ── Menu item native-script names for TTS pronunciation ───────────────────────
+# TTS engines pronounce text correctly when it is in the same script as the
+# voice language. Latin item names inside Gurmukhi/Devanagari sentences are
+# read poorly or skipped. These tables let the system prompt inject the
+# correct script per language. Tool call arguments always stay in English.
+
+MENU_ITEM_PRONUNCIATIONS = {
+    "punjabi": {
+        # Samosa
+        "Aloo Samosa":              "ਆਲੂ ਸਮੋਸਾ",
+        "Noodle Samosa":            "ਨੂਡਲ ਸਮੋਸਾ",
+        # Classics
+        "Chole Bhatura":            "ਛੋਲੇ ਭਟੂਰੇ",
+        "Choley Puri":              "ਛੋਲੇ ਪੂਰੀ",
+        "Aloo Puri":                "ਆਲੂ ਪੂਰੀ",
+        # Chaat
+        "Chaat Papdi":              "ਚਾਟ ਪਾਪੜੀ",
+        "Dahi Bhalla":              "ਦਹੀ ਭੱਲਾ",
+        "Samosa Choley":            "ਸਮੋਸਾ ਛੋਲੇ",
+        "Tawa Tikki Chaat":         "ਤਵਾ ਟਿੱਕੀ ਚਾਟ",
+        "Tawa Tikki Choley":        "ਤਵਾ ਟਿੱਕੀ ਛੋਲੇ",
+        "Aloo Besan Tikki Chaat":   "ਆਲੂ ਬੇਸਣ ਟਿੱਕੀ ਚਾਟ",
+        # Pakora
+        "Mix Veg Pakora":           "ਮਿਕਸ ਵੈਜ ਪਕੌੜਾ",
+        "Paneer Pakora":            "ਪਨੀਰ ਪਕੌੜਾ",
+        "Gobi Pakora":              "ਗੋਭੀ ਪਕੌੜਾ",
+        "Baingan Pakora":           "ਬੈਂਗਣ ਪਕੌੜਾ",
+        "Mirchi Pakora":            "ਮਿਰਚੀ ਪਕੌੜਾ",
+        "Hara Bara Kabab":          "ਹਰਾ ਭਰਾ ਕਬਾਬ",
+        "Dahi Kabab":               "ਦਹੀ ਕਬਾਬ",
+        "Mushroom Delux":           "ਮਸ਼ਰੂਮ ਡੀਲਕਸ",
+        "Aloo Cutlet":              "ਆਲੂ ਕਟਲੇਟ",
+        "Parkash Platter":          "ਪ੍ਰਕਾਸ਼ ਪਲੈਟਰ",
+        "Aloo Finger":              "ਆਲੂ ਫਿੰਗਰ",
+        "Spring Roll":              "ਸਪ੍ਰਿੰਗ ਰੋਲ",
+        "Tawa Tikki":               "ਤਵਾ ਟਿੱਕੀ",
+        "Aloo Besan Tikki":         "ਆਲੂ ਬੇਸਣ ਟਿੱਕੀ",
+        "Shimla Mirch Pakora":      "ਸ਼ਿਮਲਾ ਮਿਰਚ ਪਕੌੜਾ",
+        # Bread Pakora
+        "Aloo Bread Pakora":        "ਆਲੂ ਬ੍ਰੈੱਡ ਪਕੌੜਾ",
+        "Paneer Aloo Bread Pakora": "ਪਨੀਰ ਆਲੂ ਬ੍ਰੈੱਡ ਪਕੌੜਾ",
+        "Bread Roll":               "ਬ੍ਰੈੱਡ ਰੋਲ",
+        # Burgers
+        "Aloo Tikki Burger":        "ਆਲੂ ਟਿੱਕੀ ਬਰਗਰ",
+        "Noodle Burger":            "ਨੂਡਲ ਬਰਗਰ",
+        "Paneer Tikki Burger":      "ਪਨੀਰ ਟਿੱਕੀ ਬਰਗਰ",
+        # Parantha
+        "Aloo Parantha":            "ਆਲੂ ਪਰਾਂਠਾ",
+        "Gobi Parantha":            "ਗੋਭੀ ਪਰਾਂਠਾ",
+        "Muli Parantha":            "ਮੂਲੀ ਪਰਾਂਠਾ",
+        "Paneer Parantha":          "ਪਨੀਰ ਪਰਾਂਠਾ",
+        "Mix Parantha":             "ਮਿਕਸ ਪਰਾਂਠਾ",
+        # Desserts
+        "Rasmalai":                 "ਰਸਮਲਾਈ",
+        "Kesar Rasmalai":           "ਕੇਸਰ ਰਸਮਲਾਈ",
+        "Garam Gulab Jamun":        "ਗਰਮ ਗੁਲਾਬ ਜਾਮੁਨ",
+        "Spongey Rasgulla":         "ਰਸਗੁੱਲਾ",
+        "Moong Dal Halwa":          "ਮੂੰਗ ਦਾਲ ਹਲਵਾ",
+        "Garam Gajrela":            "ਗਰਮ ਗਾਜਰੇਲਾ",
+        # Beverages
+        "Mango Lassi":              "ਮੈਂਗੋ ਲੱਸੀ",
+        "Sweet Lassi":              "ਮਿੱਠੀ ਲੱਸੀ",
+        "Salty Lassi":              "ਨਮਕੀਨ ਲੱਸੀ",
+        "Masala Chai":              "ਮਸਾਲਾ ਚਾਹ",
+        "Elachi Chai":              "ਇਲਾਇਚੀ ਚਾਹ",
+        "Gur Chai":                 "ਗੁੜ ਦੀ ਚਾਹ",
+        "Dudh Patti":               "ਦੁੱਧ ਪੱਤੀ",
+        "Badam Milk":               "ਬਾਦਾਮ ਦੁੱਧ",
+        "Mango Faluda":             "ਮੈਂਗੋ ਫਾਲੂਦਾ",
+        "Strawberry Faluda":        "ਸਟ੍ਰਾਬੇਰੀ ਫਾਲੂਦਾ",
+        "Vanilla Faluda":           "ਵਨੀਲਾ ਫਾਲੂਦਾ",
+        "Mango Shake":              "ਮੈਂਗੋ ਸ਼ੇਕ",
+        "Badam Milk":               "ਬਾਦਾਮ ਦੁੱਧ",
+    },
+    "hindi": {
+        # Samosa
+        "Aloo Samosa":              "आलू समोसा",
+        "Noodle Samosa":            "नूडल समोसा",
+        # Classics
+        "Chole Bhatura":            "छोले भटूरे",
+        "Choley Puri":              "छोले पूरी",
+        "Aloo Puri":                "आलू पूरी",
+        # Chaat
+        "Chaat Papdi":              "चाट पापड़ी",
+        "Dahi Bhalla":              "दही भल्ला",
+        "Samosa Choley":            "समोसा छोले",
+        "Tawa Tikki Chaat":         "तवा टिक्की चाट",
+        "Tawa Tikki Choley":        "तवा टिक्की छोले",
+        "Aloo Besan Tikki Chaat":   "आलू बेसन टिक्की चाट",
+        # Pakora
+        "Mix Veg Pakora":           "मिक्स वेज पकौड़ा",
+        "Paneer Pakora":            "पनीर पकौड़ा",
+        "Gobi Pakora":              "गोभी पकौड़ा",
+        "Baingan Pakora":           "बैंगन पकौड़ा",
+        "Mirchi Pakora":            "मिर्ची पकौड़ा",
+        "Hara Bara Kabab":          "हरा भरा कबाब",
+        "Dahi Kabab":               "दही कबाब",
+        "Mushroom Delux":           "मशरूम डीलक्स",
+        "Aloo Cutlet":              "आलू कटलेट",
+        "Aloo Finger":              "आलू फिंगर",
+        "Spring Roll":              "स्प्रिंग रोल",
+        "Tawa Tikki":               "तवा टिक्की",
+        "Aloo Besan Tikki":         "आलू बेसन टिक्की",
+        "Shimla Mirch Pakora":      "शिमला मिर्च पकौड़ा",
+        # Bread Pakora
+        "Aloo Bread Pakora":        "आलू ब्रेड पकौड़ा",
+        "Paneer Aloo Bread Pakora": "पनीर आलू ब्रेड पकौड़ा",
+        "Bread Roll":               "ब्रेड रोल",
+        # Burgers
+        "Aloo Tikki Burger":        "आलू टिक्की बर्गर",
+        "Noodle Burger":            "नूडल बर्गर",
+        "Paneer Tikki Burger":      "पनीर टिक्की बर्गर",
+        # Parantha
+        "Aloo Parantha":            "आलू परांठा",
+        "Gobi Parantha":            "गोभी परांठा",
+        "Muli Parantha":            "मूली परांठा",
+        "Paneer Parantha":          "पनीर परांठा",
+        "Mix Parantha":             "मिक्स परांठा",
+        # Desserts
+        "Rasmalai":                 "रसमलाई",
+        "Kesar Rasmalai":           "केसर रसमलाई",
+        "Garam Gulab Jamun":        "गरम गुलाब जामुन",
+        "Spongey Rasgulla":         "रसगुल्ला",
+        "Moong Dal Halwa":          "मूंग दाल हलवा",
+        "Garam Gajrela":            "गरम गाजरेला",
+        # Beverages
+        "Mango Lassi":              "मैंगो लस्सी",
+        "Sweet Lassi":              "मीठी लस्सी",
+        "Salty Lassi":              "नमकीन लस्सी",
+        "Masala Chai":              "मसाला चाय",
+        "Elachi Chai":              "इलायची चाय",
+        "Gur Chai":                 "गुड़ की चाय",
+        "Dudh Patti":               "दूध पत्ती",
+        "Badam Milk":               "बादाम दूध",
+        "Mango Faluda":             "मैंगो फालूदा",
+        "Strawberry Faluda":        "स्ट्रॉबेरी फालूदा",
+        "Vanilla Faluda":           "वनीला फालूदा",
+        "Mango Shake":              "मैंगो शेक",
+    },
+    "english": {
+        # Phonetic guide — only items English TTS commonly mispronounces
+        "Chole Bhatura":    "Choh-lay Bhuh-too-rah",
+        "Choley Puri":      "Choh-lay Poo-ree",
+        "Aloo Puri":        "Ah-loo Poo-ree",
+        "Chaat Papdi":      "Chaat Pup-dee",
+        "Dahi Bhalla":      "Duh-hee Bhul-lah",
+        "Samosa Choley":    "Suh-moh-sah Choh-lay",
+        "Tawa Tikki Chaat": "Tah-wah Tik-kee Chaat",
+        "Hara Bara Kabab":  "Huh-rah Buh-rah Kuh-bob",
+        "Baingan Pakora":   "Bain-gun Puh-koh-rah",
+        "Gobi Pakora":      "Goh-bee Puh-koh-rah",
+        "Mirchi Pakora":    "Meer-chee Puh-koh-rah",
+        "Muli Parantha":    "Moo-lee Puh-raan-thah",
+        "Rasmalai":         "Rus-muh-lie",
+        "Kesar Rasmalai":   "Kay-sur Rus-muh-lie",
+        "Garam Gulab Jamun":"Guh-rum Goo-laab Juh-moon",
+        "Spongey Rasgulla": "Rus-goo-lah",
+        "Moong Dal Halwa":  "Moong Daal Hul-wah",
+        "Garam Gajrela":    "Guj-ray-lah",
+        "Elachi Chai":      "Ay-lah-chee Chai",
+        "Gur Chai":         "Gur Chai (rhymes with fur)",
+        "Dudh Patti":       "Doodh Puh-tee",
+        "Mango Faluda":     "Fah-loo-dah",
+        "Badam Milk":       "Bah-dum Milk",
+    },
+}
+
+
+def _get_pronunciation_guide(language: str) -> str:
+    lang = language.strip().lower()
+
+    if lang == "punjabi":
+        items = MENU_ITEM_PRONUNCIATIONS["punjabi"]
+        lines = " | ".join(f"{en} → {pa}" for en, pa in items.items())
+        return (
+            "\n## MENU ITEM NAMES — GURMUKHI (CRITICAL FOR TTS)\n\n"
+            "Write menu item names in Gurmukhi script in your spoken responses. "
+            "Soniox Punjabi TTS cannot pronounce Latin-script food names correctly — "
+            "Gurmukhi gives native pronunciation. "
+            "IMPORTANT: tool call arguments (place_order, get_menu, etc.) must still use English item names.\n\n"
+            f"{lines}\n\n"
+            "Items not listed (Grilled Cheese Sandwich, Coleslaw Sandwich, etc.) keep their English names."
+        )
+
+    if lang == "hindi":
+        items = MENU_ITEM_PRONUNCIATIONS["hindi"]
+        lines = " | ".join(f"{en} → {hi}" for en, hi in items.items())
+        return (
+            "\n## MENU ITEM NAMES — DEVANAGARI (CRITICAL FOR TTS)\n\n"
+            "Write menu item names in Devanagari script in your spoken responses. "
+            "Soniox Hindi TTS cannot pronounce Latin-script food names correctly — "
+            "Devanagari gives native pronunciation. "
+            "IMPORTANT: tool call arguments (place_order, get_menu, etc.) must still use English item names.\n\n"
+            f"{lines}\n\n"
+            "Items not listed keep their English names."
+        )
+
+    # English
+    items = MENU_ITEM_PRONUNCIATIONS["english"]
+    lines = " | ".join(f"{name} → {ph}" for name, ph in items.items())
+    return (
+        "\n## MENU ITEM PRONUNCIATION (ENGLISH TTS)\n\n"
+        "Use these phonetic spellings when saying item names so English TTS pronounces them correctly:\n\n"
+        f"{lines}"
+    )
+
+
 BUSINESS_INFO = """
 Restaurant Name: Parkash Sweets
 Cuisine: Punjabi Indian vegetarian sweets, snacks, chaat, pakora, paranthas, burgers, sandwiches, desserts and beverages
@@ -422,6 +629,7 @@ order, confirmed, wait time, pickup, takeout, delivery, dine-in, reservation, sp
 Example of correct Punjabi: "ਤੁਹਾਡਾ order confirmed ਹੈ — wait time 20 minutes ਹੈ।"
 Example of correct Hindi: "आपका order confirmed है — wait time 20 minutes है।"
 
+{_get_pronunciation_guide(language)}
 
 ## HOW YOU SPEAK
 
