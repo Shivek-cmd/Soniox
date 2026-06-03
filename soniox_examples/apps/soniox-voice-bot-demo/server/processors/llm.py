@@ -40,11 +40,12 @@ OPENING_GREETINGS = {
         "Hey! I'm Sierra at Parkash Sweets. What can I get for you today?"
     ),
     "hindi": (
-        "ਨਮਸਤੇ! ਮੈਂ Sierra ਹਾਂ, Parkash Sweets ਤੋਂ। "
-        "ਅੱਜ ਮੈਂ ਆਪਕੀ ਕਿਵੇਂ help ਕਰ ਸਕਦੀ ਹਾਂ?"
+        # Devanagari script — ਪ੍ਰਕਾਸ਼ (Gurmukhi) was wrong here; Hindi TTS needs Devanagari
+        "नमस्ते! मैं Sierra हूँ, प्रकाश Sweets से। "
+        "आज मैं आपकी कैसे help कर सकती हूँ?"
     ),
     "punjabi": (
-        "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ Sierra ਹਾਂਜੀ, Parkash Sweets ਤੋਂ। "
+        "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ Sierra ਹਾਂਜੀ, ਪ੍ਰਕਾਸ਼ Sweets ਤੋਂ। "
         "ਅੱਜ ਮੈਂ ਤੁਹਾਡੀ ਕੀ madad ਕਰ ਸਕਦੀ ਹਾਂ?"
     ),
 }

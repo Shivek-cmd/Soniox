@@ -366,6 +366,8 @@ ITEM_ALIASES = {
 
 MENU_ITEM_PRONUNCIATIONS = {
     "punjabi": {
+        # Restaurant name
+        "Parkash Sweets":           "ਪ੍ਰਕਾਸ਼ Sweets",
         # Samosa
         "Aloo Samosa":              "ਆਲੂ ਸਮੋਸਾ",
         "Noodle Samosa":            "ਨੂਡਲ ਸਮੋਸਾ",
@@ -433,6 +435,8 @@ MENU_ITEM_PRONUNCIATIONS = {
         "Badam Milk":               "ਬਾਦਾਮ ਦੁੱਧ",
     },
     "hindi": {
+        # Restaurant name
+        "Parkash Sweets":           "प्रकाश Sweets",
         # Samosa
         "Aloo Samosa":              "आलू समोसा",
         "Noodle Samosa":            "नूडल समोसा",
@@ -499,6 +503,7 @@ MENU_ITEM_PRONUNCIATIONS = {
     },
     "english": {
         # Phonetic guide — only items English TTS commonly mispronounces
+        "Parkash Sweets":   "Pruh-kaash Sweets",
         "Chole Bhatura":    "Choh-lay Bhuh-too-rah",
         "Choley Puri":      "Choh-lay Poo-ree",
         "Aloo Puri":        "Ah-loo Poo-ree",
@@ -533,9 +538,10 @@ def _get_pronunciation_guide(language: str) -> str:
         items = MENU_ITEM_PRONUNCIATIONS["punjabi"]
         lines = " | ".join(f"{en} → {pa}" for en, pa in items.items())
         return (
-            "\n## MENU ITEM NAMES — GURMUKHI (CRITICAL FOR TTS)\n\n"
+            "\n## NAMES & MENU ITEMS — GURMUKHI (CRITICAL FOR TTS)\n\n"
+            f"Restaurant name in Gurmukhi: ਪ੍ਰਕਾਸ਼ Sweets — ALWAYS say the restaurant as 'ਪ੍ਰਕਾਸ਼ Sweets', never 'Parkash Sweets'.\n\n"
             "Write menu item names in Gurmukhi script in your spoken responses. "
-            "Soniox Punjabi TTS cannot pronounce Latin-script food names correctly — "
+            "Soniox Punjabi TTS cannot pronounce Latin-script Indian food names correctly — "
             "Gurmukhi gives native pronunciation. "
             "IMPORTANT: tool call arguments (place_order, get_menu, etc.) must still use English item names.\n\n"
             f"{lines}\n\n"
@@ -546,9 +552,10 @@ def _get_pronunciation_guide(language: str) -> str:
         items = MENU_ITEM_PRONUNCIATIONS["hindi"]
         lines = " | ".join(f"{en} → {hi}" for en, hi in items.items())
         return (
-            "\n## MENU ITEM NAMES — DEVANAGARI (CRITICAL FOR TTS)\n\n"
+            "\n## NAMES & MENU ITEMS — DEVANAGARI (CRITICAL FOR TTS)\n\n"
+            f"Restaurant name in Devanagari: प्रकाश Sweets — ALWAYS say the restaurant as 'प्रकाश Sweets', never 'Parkash Sweets'.\n\n"
             "Write menu item names in Devanagari script in your spoken responses. "
-            "Soniox Hindi TTS cannot pronounce Latin-script food names correctly — "
+            "Soniox Hindi TTS cannot pronounce Latin-script Indian food names correctly — "
             "Devanagari gives native pronunciation. "
             "IMPORTANT: tool call arguments (place_order, get_menu, etc.) must still use English item names.\n\n"
             f"{lines}\n\n"
@@ -559,8 +566,9 @@ def _get_pronunciation_guide(language: str) -> str:
     items = MENU_ITEM_PRONUNCIATIONS["english"]
     lines = " | ".join(f"{name} → {ph}" for name, ph in items.items())
     return (
-        "\n## MENU ITEM PRONUNCIATION (ENGLISH TTS)\n\n"
-        "Use these phonetic spellings when saying item names so English TTS pronounces them correctly:\n\n"
+        "\n## PRONUNCIATION GUIDE (ENGLISH TTS)\n\n"
+        "The restaurant name is 'Pruh-kaash Sweets' — say it naturally, not 'Par-kash'.\n\n"
+        "Use these phonetic spellings for item names so English TTS pronounces them correctly:\n\n"
         f"{lines}"
     )
 
