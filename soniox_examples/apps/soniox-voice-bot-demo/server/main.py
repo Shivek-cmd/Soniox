@@ -76,7 +76,24 @@ class DynamicTTSProcessor(TTSProcessor):
         if not self._active_stream_id:
             self._language = self._state.tts_language
             self._voice = self._state.tts_voice
+            # Soniox closes idle TTS connections after ~10s (e.g. while cached
+            # greeting WAV is playing). Reconnect transparently before first use.
+            if self._websocket is not None and self._websocket.closed:
+                await self._reconnect_tts()
         await super()._generate_tts_response(message)
+
+    async def _reconnect_tts(self):
+        self.log.info("TTS WebSocket idle-timeout — reconnecting")
+        for task in (self._receive_task, self._send_task):
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self._websocket = await websockets.connect(self._api_host)
+        self._receive_task = asyncio.create_task(self._receive_task_handler())
+        self._send_task = asyncio.create_task(self._send_task_handler())
 
     async def _on_stream_finalized(self):
         if self._state.confirmed_order and self._send_message:
