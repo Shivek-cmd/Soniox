@@ -22,6 +22,8 @@ from processors.vad import VADProcessor
 from session import Session
 from tools import (
     LANGUAGE_CONFIG,
+    RESTAURANT_NAME,
+    STT_TERMS,
     RestaurantState,
     get_system_message,
     get_tools,
@@ -49,30 +51,7 @@ STT_CONTEXT = {
         {"key": "domain", "value": "restaurant"},
         {"key": "topic", "value": "food ordering"},
     ],
-    "terms": [
-        "Parkash Sweets", "Aloo Samosa", "Noodle Samosa",
-        "Chole Bhatura", "Choley Puri", "Aloo Puri", "Chaat Papdi",
-        "Dahi Bhalla", "Samosa Choley", "Tawa Tikki Chaat",
-        "Tawa Tikki Choley", "Aloo Besan Tikki Chaat", "Mix Veg Pakora",
-        "Baingan Pakora", "Spring Roll", "Aloo Cutlet", "Parkash Platter",
-        "Paneer Pakora", "Mirchi Pakora", "Hara Bara Kabab", "Gobi Pakora",
-        "Dahi Kabab", "Mushroom Delux", "Aloo Besan Tikki",
-        "Shimla Mirch Pakora", "Aloo Finger", "Tawa Tikki",
-        "Aloo Bread Pakora", "Paneer Aloo Bread Pakora", "Bread Roll",
-        "Aloo Tikki Burger", "Noodle Burger", "Paneer Tikki Burger",
-        "Grilled Cheese Sandwich", "Super Veggie Sandwich",
-        "Sweet Corn Sandwich", "Paneer Mayo Sandwich", "Coleslaw Sandwich",
-        "Aloo Parantha", "Gobi Parantha", "Muli Parantha",
-        "Paneer Parantha", "Mix Parantha", "Rasmalai", "Spongey Rasgulla",
-        "Garam Gulab Jamun", "Moong Dal Halwa", "Garam Gajrela",
-        "Kesar Rasmalai", "Mango Shake", "Strawberry Shake", "Oreo Shake",
-        "Chocolate Shake", "Vanilla Shake", "Mango Faluda",
-        "Strawberry Faluda", "Vanilla Faluda", "Masala Chai", "Elachi Chai",
-        "Gur Chai", "Dudh Patti", "Coffee Indian Style", "Sweet Lassi",
-        "Salty Lassi", "Mango Lassi", "Badam Milk", "Butter", "Dahi",
-        "Raita", "Extra Bhatura", "Extra Puri", "Choley", "Mix Pickle",
-        "Tamarind Sauce", "Mint Sauce", "dine-in", "pickup", "delivery",
-    ],
+    "terms": [RESTAURANT_NAME] + STT_TERMS + ["dine-in", "pickup", "delivery"],
 }
 
 SONIOX_API_KEY_TTS = os.getenv("SONIOX_API_KEY_TTS") or SONIOX_API_KEY

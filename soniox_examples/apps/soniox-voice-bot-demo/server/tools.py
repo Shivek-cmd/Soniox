@@ -1,12 +1,98 @@
+import json
 import os
+import re
 from datetime import datetime
+from pathlib import Path
 
 import httpx
 from openai.types.chat import ChatCompletionFunctionToolParam
+from rapidfuzz import fuzz, process
 
+# ── Load menu.json (single source of truth) ───────────────────────────────────
 
-RESTAURANT_NAME = "Parkash Sweets"
-SPOKEN_RESTAURANT_NAME = "Prakaash Sweets"
+_MENU_PATH = Path(__file__).parent.parent / "menu.json"
+_DATA = json.loads(_MENU_PATH.read_text(encoding="utf-8"))
+
+# ── Business constants ────────────────────────────────────────────────────────
+
+_BIZ = _DATA["business"]
+RESTAURANT_NAME = _BIZ["name"]
+SPOKEN_RESTAURANT_NAME = _BIZ["spoken_name"]
+
+BUSINESS_INFO = (
+    f"Restaurant Name: {_BIZ['name']}\n"
+    f"Cuisine: {_BIZ['cuisine']}\n"
+    f"Locations shown on menu: {_BIZ['locations']}\n"
+    f"Hours: {_BIZ['hours']}\n"
+    f"Phone: {_BIZ['phone']}\n"
+    f"Accepts: {_BIZ['payment']}\n"
+    f"Orders: {_BIZ['order_types']}\n"
+    f"All prices are in Canadian dollars ({_BIZ['currency']})."
+)
+
+# ── MENU dict: category_id → list[item] ──────────────────────────────────────
+
+MENU: dict[str, list[dict]] = {
+    cat["id"]: cat["items"]
+    for cat in _DATA["categories"]
+}
+
+# ── Category aliases: spoken alias → canonical category id ───────────────────
+
+MENU_CATEGORY_ALIASES: dict[str, str] = _DATA["category_aliases"]
+
+# ── Item aliases: lowercase English term → canonical item name ───────────────
+# Native-script terms (Gurmukhi / Devanagari) are excluded — they are only
+# used by the frontend's real-time order parser.
+
+_NATIVE_RE = re.compile(r"[ऀ-ॿ਀-੿]")
+
+ITEM_ALIASES: dict[str, str] = {}
+for _cat in _DATA["categories"]:
+    for _item in _cat["items"]:
+        for _term in _item.get("terms", []):
+            if not _NATIVE_RE.search(_term):
+                ITEM_ALIASES[_term.lower()] = _item["name"]
+
+# ── Pronunciation tables ──────────────────────────────────────────────────────
+
+MENU_ITEM_PRONUNCIATIONS: dict[str, dict[str, str]] = {
+    "punjabi": {},
+    "hindi": {},
+    "english": {},
+}
+
+# Restaurant name first so it appears first in the guide
+for _lang, _val in _BIZ.get("pronunciation", {}).items():
+    if _lang in MENU_ITEM_PRONUNCIATIONS:
+        MENU_ITEM_PRONUNCIATIONS[_lang][RESTAURANT_NAME] = _val
+
+# Menu items in category order
+for _cat in _DATA["categories"]:
+    for _item in _cat["items"]:
+        for _lang, _val in _item.get("pronunciation", {}).items():
+            if _val and _lang in MENU_ITEM_PRONUNCIATIONS:
+                MENU_ITEM_PRONUNCIATIONS[_lang][_item["name"]] = _val
+
+# ── STT terms: simplified item names for Soniox speech context ───────────────
+# Strips quantity/size suffixes ("(2 pcs)", "- 8 oz") so Soniox targets the
+# spoken word, not the display label.
+
+def _to_stt_name(name: str) -> str:
+    s = re.sub(r"\s*\([^)]+\)", "", name).strip()
+    s = re.sub(r"\s*-\s*\d+\s*oz\b", "", s, flags=re.IGNORECASE).strip()
+    return s.replace(" - ", " ").strip()
+
+_seen_stt: set[str] = set()
+STT_TERMS: list[str] = []
+for _cat in _DATA["categories"]:
+    for _item in _cat["items"]:
+        _stt = _to_stt_name(_item["name"])
+        if _stt not in _seen_stt:
+            _seen_stt.add(_stt)
+            STT_TERMS.append(_stt)
+
+# ── Language config ───────────────────────────────────────────────────────────
 
 LANGUAGE_CONFIG = {
     "english": {"tts_language": "en", "tts_voice": "Maya"},
@@ -14,6 +100,8 @@ LANGUAGE_CONFIG = {
     "punjabi": {"tts_language": "pa", "tts_voice": "Maya"},
 }
 
+
+# ── Per-call state ────────────────────────────────────────────────────────────
 
 class RestaurantState:
     """Mutable per-call state shared between tools and DynamicTTSProcessor."""
@@ -25,521 +113,19 @@ class RestaurantState:
         self.caller_phone = caller_phone
         self.confirmed_order: dict | None = None
 
-MENU = {
-    "samosa": [
-        {"name": "Aloo Samosa (2 pcs)", "price": 3.00, "description": "Fried dough stuffed with spiced potato and peas."},
-        {"name": "Noodle Samosa (2 pcs)", "price": 4.50, "description": "Fried dough stuffed with noodles and juicy veggies with soya sauce and vinegar."},
-    ],
-    "parkash_classic": [
-        {"name": "Chole Bhature", "price": 7.99, "description": "Chickpeas curry with two fried bhature."},
-        {"name": "Choley Puri", "price": 7.99, "description": "Chickpeas curry with three puris."},
-        {"name": "Aloo Puri", "price": 7.99, "description": "Tangy aloo curry with three puris."},
-    ],
-    "chaat": [
-        {"name": "Chaat Papdi", "price": 5.99, "description": "Crispy chips with potatoes, onions, chickpeas, yogurt, mint and tamarind chutney."},
-        {"name": "Dahi Bhalla", "price": 5.99, "description": "Soft lentil dumplings in chilled yogurt with tamarind chutney and spices."},
-        {"name": "Samosa Choley", "price": 6.50, "description": "Two aloo samosas with spicy chickpeas, yogurt and chutney."},
-        {"name": "Tawa Tikki Chaat", "price": 6.00, "description": "Crisp potato patty topped with yogurt, tamarind, mint sauce and salad."},
-        {"name": "Tawa Tikki Choley", "price": 7.50, "description": "Crisp potato patty with chickpea curry, yogurt, tamarind, mint sauce and salad."},
-        {"name": "Aloo Besan Tikki Chaat", "price": 5.00, "description": "Potato patty made with peas, onions, gram flour and spices with yogurt, tamarind and mint sauce."},
-    ],
-    "pakora": [
-        {"name": "Mix Veg Pakora", "price": 8.50, "description": "Spinach fritters with gram flour, spices, cauliflower, onions, potatoes and spinach."},
-        {"name": "Baingan Pakora", "price": 8.50, "description": "Thin slices of eggplant dipped in spiced gram flour batter and fried."},
-        {"name": "Spring Roll", "price": 8.00, "description": "Cabbage, noodles, carrots and onions wrapped in a flaky crispy roll."},
-        {"name": "Aloo Cutlet", "price": 10.50, "description": "Crispy mashed potato with spices and herbs."},
-        {"name": "Parkash Platter", "price": 15.99, "description": "Assorted vegetable pakoras, paneer, gobi, aloo fingers, baingan, aloo cutlets, hara bara kababs, mushroom, bread rolls, dahi kabab and mirchi."},
-        {"name": "Paneer Pakora", "price": 11.50, "description": "Indian cottage cheese pieces coated in spiced gram batter and deep fried."},
-        {"name": "Mirchi Pakora", "price": 10.50, "description": "Stuffed green chili fritters with gram flour, spices and herbs."},
-        {"name": "Hara Bara Kabab", "price": 10.50, "description": "Spinach, green peas and potatoes shaped into crisp pan-fried patties."},
-        {"name": "Gobi Pakora", "price": 10.50, "description": "Cauliflower fritters with gram flour, spices and herbs."},
-        {"name": "Dahi Kabab", "price": 9.00, "description": "Creamy yogurt patties with herbs, spices and flour, lightly pan fried."},
-        {"name": "Mushroom Delux", "price": 9.00, "description": "Mushrooms dipped in spicy gram flour batter and fried crisp. Six pieces per order."},
-        {"name": "Aloo Besan Tikki (2 pcs)", "price": 3.00, "description": "Crisp potato patties with peas, onions, gram flour and spices."},
-        {"name": "Shimla Mirch Pakora", "price": 5.00, "description": "Capsicum rings filled with spiced potato stuffing and fried in gram flour batter. Two pieces per order."},
-        {"name": "Aloo Finger", "price": 8.50, "description": "Golden brown crispy potato fingers."},
-        {"name": "Tawa Tikki (2 pcs)", "price": 4.00, "description": "Golden fried potato patties, crisp outside and soft inside."},
-    ],
-    "bread_pakora": [
-        {"name": "Aloo Bread Pakora", "price": 3.00, "description": "Spiced potato stuffing between two slices of white bread. Two pieces per order."},
-        {"name": "Paneer Aloo Bread Pakora", "price": 5.00, "description": "Bread fritters with potato and paneer. Two pieces per order."},
-        {"name": "Bread Roll", "price": 3.00, "description": "Crispy outside with tangy savory potato stuffing. Two pieces per order."},
-    ],
-    "burger_sandwich": [
-        {"name": "Aloo Tikki Burger", "price": 6.50, "description": "Spiced potato patty with lettuce, sliced onions and spicy mayo."},
-        {"name": "Noodle Burger", "price": 7.50, "description": "Spiced aloo patty with Asian-style noodles, cucumber, onion and signature mayo."},
-        {"name": "Paneer Tikki Burger", "price": 8.50, "description": "Spicy marinated paneer tikki with lettuce, onions and signature sauce."},
-        {"name": "Grilled Cheese Sandwich", "price": 5.50, "description": "Golden toasted bread with melted cheese."},
-        {"name": "Super Veggie Sandwich", "price": 6.99, "description": "Red onion, capsicum, carrots, sweet corn, shredded cheese, spicy mayo, seasoning and oregano."},
-        {"name": "Sweet Corn Sandwich", "price": 6.99, "description": "Sweet corn, shredded cheese, signature tangy sauce, seasoning and oregano."},
-        {"name": "Paneer Mayo Sandwich", "price": 7.99, "description": "Paneer cubes, shredded cheese, sweet corn, capsicum, carrot, onion, spicy mayo, seasoning and oregano."},
-        {"name": "Coleslaw Sandwich - Kids Size", "price": 5.00, "description": "White bread with eggless mayo, carrots, cabbage, black pepper and salt."},
-        {"name": "Triple Layer Sandwich Add On", "price": 1.00, "description": "Add-on for sandwiches."},
-    ],
-    "parantha": [
-        {"name": "Aloo Parantha", "price": 4.00, "description": "Flatbread stuffed with spiced mashed potatoes, served with mix pickle."},
-        {"name": "Gobi Parantha", "price": 4.50, "description": "Flatbread stuffed with spiced grated cauliflower, served with mix pickle."},
-        {"name": "Muli Parantha", "price": 4.50, "description": "Flatbread stuffed with spiced grated radish, served with mix pickle."},
-        {"name": "Paneer Parantha", "price": 4.99, "description": "Flatbread stuffed with spiced Indian cottage cheese, served with mix pickle."},
-        {"name": "Mix Parantha", "price": 4.99, "description": "Flatbread stuffed with potato, cauliflower, paneer and radish, served with mix pickle."},
-    ],
-    "desserts": [
-        {"name": "Rasmalai (2 pcs)", "price": 4.00, "description": "Soft cheese dumplings soaked in creamy cardamom-saffron milk."},
-        {"name": "Spongey Rasgulla (2 pcs)", "price": 3.00, "description": "Soft round dumplings in sugar syrup."},
-        {"name": "Garam Gulab Jamun (2 pcs)", "price": 3.00, "description": "Fried dough balls with almond inside, served in warm sugar syrup."},
-        {"name": "Moong Dal Halwa - 8 oz", "price": 5.50, "description": "Traditional dessert made from yellow moong dal, slow cooked with ghee, sugar and nuts."},
-        {"name": "Garam Gajrela - 8 oz", "price": 4.50, "description": "Fresh carrots cooked in milk with sugar, almonds, cashews, mawa and cardamom."},
-        {"name": "Kesar Rasmalai (6 pcs)", "price": 5.99, "description": "Paneer dumplings soaked in saffron milk."},
-    ],
-    "shake_faluda": [
-        {"name": "Mango Shake", "price": 5.50},
-        {"name": "Strawberry Shake", "price": 5.50},
-        {"name": "Oreo Shake", "price": 5.50},
-        {"name": "Chocolate Shake", "price": 5.50},
-        {"name": "Vanilla Shake", "price": 5.50},
-        {"name": "Mango Faluda", "price": 8.50},
-        {"name": "Strawberry Faluda", "price": 8.50},
-        {"name": "Vanilla Faluda", "price": 8.50},
-    ],
-    "beverages": [
-        {"name": "Masala Chai", "price": 1.99},
-        {"name": "Elachi Chai", "price": 2.99},
-        {"name": "Gur Chai", "price": 2.99},
-        {"name": "Dudh Patti", "price": 2.99},
-        {"name": "Coffee - Indian Style", "price": 2.99},
-        {"name": "Sweet Lassi", "price": 4.49},
-        {"name": "Salty Lassi", "price": 4.49},
-        {"name": "Mango Lassi", "price": 4.99},
-        {"name": "Badam Milk", "price": 5.99},
-    ],
-    "sides": [
-        {"name": "Butter (2 pcs)", "price": 0.99},
-        {"name": "Dahi - 8 oz", "price": 2.99},
-        {"name": "Raita - 8 oz", "price": 2.99},
-        {"name": "Extra Bhatura", "price": 2.50},
-        {"name": "Extra Puri", "price": 1.50},
-        {"name": "Choley - 8 oz", "price": 2.99},
-        {"name": "Mix Pickle - 2 oz", "price": 1.49},
-        {"name": "Tamarind Sauce - 2 oz", "price": 1.00},
-        {"name": "Mint Sauce - 2 oz", "price": 1.50},
-    ],
-}
 
-MENU_CATEGORY_ALIASES = {
-    # ── Snacks / starters ───────────────────────────────────────
-    "starter": "all_snacks",
-    "starters": "all_snacks",
-    "snack": "all_snacks",
-    "snacks": "all_snacks",
-    "appetizer": "all_snacks",
-    "appetizers": "all_snacks",
-    "fried": "all_snacks",
-    # ── Classics ────────────────────────────────────────────────
-    "classic": "parkash_classic",
-    "parkash classic": "parkash_classic",
-    "main": "parkash_classic",
-    "mains": "parkash_classic",
-    "main course": "parkash_classic",
-    "meal": "parkash_classic",
-    # ── Chaat ───────────────────────────────────────────────────
-    "chaat": "chaat",
-    "chat": "chaat",
-    # ── Samosa ──────────────────────────────────────────────────
-    "samosa": "samosa",
-    "samosas": "samosa",
-    "samosay": "samosa",
-    # ── Pakora ──────────────────────────────────────────────────
-    "pakora": "pakora",
-    "pakoras": "pakora",
-    "pakoda": "pakora",
-    "pakodas": "pakora",
-    "crispy": "pakora",
-    "fritter": "pakora",
-    "fritters": "pakora",
-    "platter": "pakora",
-    # ── Bread Pakora ────────────────────────────────────────────
-    "bread pakora": "bread_pakora",
-    "bread": "bread_pakora",
-    "roll": "bread_pakora",
-    "rolls": "bread_pakora",
-    # ── Burgers & Sandwiches ────────────────────────────────────
-    "burger": "burger_sandwich",
-    "burgers": "burger_sandwich",
-    "sandwich": "burger_sandwich",
-    "sandwiches": "burger_sandwich",
-    # ── Parantha ────────────────────────────────────────────────
-    "parantha": "parantha",
-    "paranthas": "parantha",
-    "paratha": "parantha",
-    "parathas": "parantha",
-    # ── Desserts ────────────────────────────────────────────────
-    "sweet": "desserts",
-    "sweets": "desserts",
-    "dessert": "desserts",
-    "desserts": "desserts",
-    "mithai": "desserts",
-    "mithais": "desserts",
-    "halwa": "desserts",
-    "meetha": "desserts",
-    # ── Shakes & Faluda ─────────────────────────────────────────
-    "shake": "shake_faluda",
-    "shakes": "shake_faluda",
-    "milkshake": "shake_faluda",
-    "milkshakes": "shake_faluda",
-    "faluda": "shake_faluda",
-    "falooda": "shake_faluda",
-    # ── Beverages ───────────────────────────────────────────────
-    "drink": "beverages",
-    "drinks": "beverages",
-    "beverage": "beverages",
-    "beverages": "beverages",
-    "chai": "beverages",
-    "tea": "beverages",
-    "lassi": "beverages",
-    "coffee": "beverages",
-    # ── Sides ───────────────────────────────────────────────────
-    "side": "sides",
-    "sides": "sides",
-    "extra": "sides",
-    "add on": "sides",
-    "add-on": "sides",
-}
-
-ITEM_ALIASES = {
-    # ── Samosa ──────────────────────────────────────────────────
-    "samosa": "Aloo Samosa (2 pcs)",
-    "aloo samosa": "Aloo Samosa (2 pcs)",
-    "regular samosa": "Aloo Samosa (2 pcs)",
-    "noodle samosa": "Noodle Samosa (2 pcs)",
-
-    # ── Parkash Classics ────────────────────────────────────────
-    "chole bhature": "Chole Bhatura",
-    "chole bhatura": "Chole Bhatura",
-    "choley bhatura": "Chole Bhatura",
-    "chhole bhatura": "Chole Bhatura",
-    "chhole bhature": "Chole Bhatura",
-    "chole puri": "Choley Puri",
-    "choley puri": "Choley Puri",
-
-    # ── Chaat ───────────────────────────────────────────────────
-    "papdi chaat": "Chaat Papdi",
-    "papri chaat": "Chaat Papdi",
-    "chaat papri": "Chaat Papdi",
-    "samosa chaat": "Samosa Choley",
-    "samosa chole": "Samosa Choley",
-    "samosa choley": "Samosa Choley",
-    "tikki chaat": "Tawa Tikki Chaat",
-    "tawa tikki chaat": "Tawa Tikki Chaat",
-    "tikki choley": "Tawa Tikki Choley",
-    "tikki chole": "Tawa Tikki Choley",
-    "tawa tikki choley": "Tawa Tikki Choley",
-    "besan tikki chaat": "Aloo Besan Tikki Chaat",
-    "aloo tikki chaat": "Aloo Besan Tikki Chaat",
-
-    # ── Pakora / Snacks ─────────────────────────────────────────
-    "veg pakora": "Mix Veg Pakora",
-    "mix pakora": "Mix Veg Pakora",
-    "mixed pakora": "Mix Veg Pakora",
-    "mushroom": "Mushroom Delux",
-    "mushroom pakora": "Mushroom Delux",
-    "mushrooms": "Mushroom Delux",
-    "aloo cutlet": "Aloo Cutlet",
-    "cutlet": "Aloo Cutlet",
-    "aloo finger": "Aloo Finger",
-    "aloo fingers": "Aloo Finger",
-    "potato fingers": "Aloo Finger",
-    "platter": "Parkash Platter",
-    "parkash platter": "Parkash Platter",
-    "hara bhara kabab": "Hara Bara Kabab",
-    "hara bhara": "Hara Bara Kabab",
-    "hara bara": "Hara Bara Kabab",
-    "shimla mirch": "Shimla Mirch Pakora",
-    "tawa tikki": "Tawa Tikki (2 pcs)",
-    "besan tikki": "Aloo Besan Tikki (2 pcs)",
-    "aloo besan tikki": "Aloo Besan Tikki (2 pcs)",
-    "paneer pakoda": "Paneer Pakora",
-    "paner pakora": "Paneer Pakora",
-
-    # ── Bread Pakora ─────────────────────────────────────────────
-    "bread roll": "Bread Roll",
-    "aloo bread": "Aloo Bread Pakora",
-    "paneer aloo bread": "Paneer Aloo Bread Pakora",
-    "paneer bread": "Paneer Aloo Bread Pakora",
-    "paneer bread pakora": "Paneer Aloo Bread Pakora",
-
-    # ── Burgers & Sandwiches ─────────────────────────────────────
-    "aloo burger": "Aloo Tikki Burger",
-    "tikki burger": "Aloo Tikki Burger",
-    "paneer burger": "Paneer Tikki Burger",
-    "grilled cheese": "Grilled Cheese Sandwich",
-    "cheese sandwich": "Grilled Cheese Sandwich",
-    "veggie sandwich": "Super Veggie Sandwich",
-    "veg sandwich": "Super Veggie Sandwich",
-    "corn sandwich": "Sweet Corn Sandwich",
-    "sweet corn sandwich": "Sweet Corn Sandwich",
-    "paneer mayo": "Paneer Mayo Sandwich",
-    "paneer sandwich": "Paneer Mayo Sandwich",
-    "coleslaw sandwich": "Coleslaw Sandwich - Kids Size",
-    "kids sandwich": "Coleslaw Sandwich - Kids Size",
-
-    # ── Parantha ─────────────────────────────────────────────────
-    "aloo paratha": "Aloo Parantha",
-    "aloo parantha": "Aloo Parantha",
-    "gobi paratha": "Gobi Parantha",
-    "gobi parantha": "Gobi Parantha",
-    "muli paratha": "Muli Parantha",
-    "mooli parantha": "Muli Parantha",
-    "mooli paratha": "Muli Parantha",
-    "paneer paratha": "Paneer Parantha",
-    "paneer parantha": "Paneer Parantha",
-    "mix paratha": "Mix Parantha",
-    "mix parantha": "Mix Parantha",
-
-    # ── Desserts ─────────────────────────────────────────────────
-    "rasmalai": "Rasmalai (2 pcs)",
-    "kesar rasmalai": "Kesar Rasmalai (6 pcs)",
-    "saffron rasmalai": "Kesar Rasmalai (6 pcs)",
-    "gulab jamun": "Garam Gulab Jamun (2 pcs)",
-    "garam gulab jamun": "Garam Gulab Jamun (2 pcs)",
-    "rasgulla": "Spongey Rasgulla (2 pcs)",
-    "spongey rasgulla": "Spongey Rasgulla (2 pcs)",
-    "moong dal halwa": "Moong Dal Halwa - 8 oz",
-    "dal halwa": "Moong Dal Halwa - 8 oz",
-    "gajrela": "Garam Gajrela - 8 oz",
-    "garam gajrela": "Garam Gajrela - 8 oz",
-    "gajar halwa": "Garam Gajrela - 8 oz",
-    "gajar ka halwa": "Garam Gajrela - 8 oz",
-    "carrot halwa": "Garam Gajrela - 8 oz",
-
-    # ── Beverages ────────────────────────────────────────────────
-    "chai": "Masala Chai",
-    "masala chai": "Masala Chai",
-    "tea": "Masala Chai",
-    "elachi chai": "Elachi Chai",
-    "cardamom chai": "Elachi Chai",
-    "gur chai": "Gur Chai",
-    "jaggery chai": "Gur Chai",
-    "dudh patti": "Dudh Patti",
-    "doodh patti": "Dudh Patti",
-    "coffee": "Coffee - Indian Style",
-    "indian coffee": "Coffee - Indian Style",
-    "sweet lassi": "Sweet Lassi",
-    "salty lassi": "Salty Lassi",
-    "namkeen lassi": "Salty Lassi",
-    "salt lassi": "Salty Lassi",
-    "mango lassi": "Mango Lassi",
-    "badam milk": "Badam Milk",
-    "almond milk": "Badam Milk",
-    "mango shake": "Mango Shake",
-    "strawberry shake": "Strawberry Shake",
-    "oreo shake": "Oreo Shake",
-    "chocolate shake": "Chocolate Shake",
-    "choco shake": "Chocolate Shake",
-    "vanilla shake": "Vanilla Shake",
-    "mango faluda": "Mango Faluda",
-    "strawberry faluda": "Strawberry Faluda",
-    "vanilla faluda": "Vanilla Faluda",
-    "falooda": "Mango Faluda",
-    "faluda": "Mango Faluda",
-
-    # ── Sides ────────────────────────────────────────────────────
-    "butter": "Butter (2 pcs)",
-    "dahi": "Dahi - 8 oz",
-    "yogurt": "Dahi - 8 oz",
-    "raita": "Raita - 8 oz",
-    "mix pickle": "Mix Pickle - 2 oz",
-    "pickle": "Mix Pickle - 2 oz",
-    "achar": "Mix Pickle - 2 oz",
-    "tamarind sauce": "Tamarind Sauce - 2 oz",
-    "imli sauce": "Tamarind Sauce - 2 oz",
-    "imli chutney": "Tamarind Sauce - 2 oz",
-    "mint sauce": "Mint Sauce - 2 oz",
-    "pudina sauce": "Mint Sauce - 2 oz",
-    "pudina chutney": "Mint Sauce - 2 oz",
-}
-
-# ── Menu item native-script names for TTS pronunciation ───────────────────────
-# TTS engines pronounce text correctly when it is in the same script as the
-# voice language. Latin item names inside Gurmukhi/Devanagari sentences are
-# read poorly or skipped. These tables let the system prompt inject the
-# correct script per language. Tool call arguments always stay in English.
-
-MENU_ITEM_PRONUNCIATIONS = {
-    "punjabi": {
-        # Restaurant name
-        "Parkash Sweets":           "ਪ੍ਰਕਾਸ਼ Sweets",
-        # Samosa
-        "Aloo Samosa":              "ਆਲੂ ਸਮੋਸਾ",
-        "Noodle Samosa":            "ਨੂਡਲ ਸਮੋਸਾ",
-        # Classics
-        "Chole Bhatura":            "ਛੋਲੇ ਭਟੂਰੇ",
-        "Choley Puri":              "ਛੋਲੇ ਪੂਰੀ",
-        "Aloo Puri":                "ਆਲੂ ਪੂਰੀ",
-        # Chaat
-        "Chaat Papdi":              "ਚਾਟ ਪਾਪੜੀ",
-        "Dahi Bhalla":              "ਦਹੀ ਭੱਲਾ",
-        "Samosa Choley":            "ਸਮੋਸਾ ਛੋਲੇ",
-        "Tawa Tikki Chaat":         "ਤਵਾ ਟਿੱਕੀ ਚਾਟ",
-        "Tawa Tikki Choley":        "ਤਵਾ ਟਿੱਕੀ ਛੋਲੇ",
-        "Aloo Besan Tikki Chaat":   "ਆਲੂ ਬੇਸਣ ਟਿੱਕੀ ਚਾਟ",
-        # Pakora
-        "Mix Veg Pakora":           "ਮਿਕਸ ਵੈਜ ਪਕੌੜਾ",
-        "Paneer Pakora":            "ਪਨੀਰ ਪਕੌੜਾ",
-        "Gobi Pakora":              "ਗੋਭੀ ਪਕੌੜਾ",
-        "Baingan Pakora":           "ਬੈਂਗਣ ਪਕੌੜਾ",
-        "Mirchi Pakora":            "ਮਿਰਚੀ ਪਕੌੜਾ",
-        "Hara Bara Kabab":          "ਹਰਾ ਭਰਾ ਕਬਾਬ",
-        "Dahi Kabab":               "ਦਹੀ ਕਬਾਬ",
-        "Mushroom Delux":           "ਮਸ਼ਰੂਮ ਡੀਲਕਸ",
-        "Aloo Cutlet":              "ਆਲੂ ਕਟਲੇਟ",
-        "Parkash Platter":          "ਪ੍ਰਕਾਸ਼ ਪਲੈਟਰ",
-        "Aloo Finger":              "ਆਲੂ ਫਿੰਗਰ",
-        "Spring Roll":              "ਸਪ੍ਰਿੰਗ ਰੋਲ",
-        "Tawa Tikki":               "ਤਵਾ ਟਿੱਕੀ",
-        "Aloo Besan Tikki":         "ਆਲੂ ਬੇਸਣ ਟਿੱਕੀ",
-        "Shimla Mirch Pakora":      "ਸ਼ਿਮਲਾ ਮਿਰਚ ਪਕੌੜਾ",
-        # Bread Pakora
-        "Aloo Bread Pakora":        "ਆਲੂ ਬ੍ਰੈੱਡ ਪਕੌੜਾ",
-        "Paneer Aloo Bread Pakora": "ਪਨੀਰ ਆਲੂ ਬ੍ਰੈੱਡ ਪਕੌੜਾ",
-        "Bread Roll":               "ਬ੍ਰੈੱਡ ਰੋਲ",
-        # Burgers
-        "Aloo Tikki Burger":        "ਆਲੂ ਟਿੱਕੀ ਬਰਗਰ",
-        "Noodle Burger":            "ਨੂਡਲ ਬਰਗਰ",
-        "Paneer Tikki Burger":      "ਪਨੀਰ ਟਿੱਕੀ ਬਰਗਰ",
-        # Parantha
-        "Aloo Parantha":            "ਆਲੂ ਪਰਾਂਠਾ",
-        "Gobi Parantha":            "ਗੋਭੀ ਪਰਾਂਠਾ",
-        "Muli Parantha":            "ਮੂਲੀ ਪਰਾਂਠਾ",
-        "Paneer Parantha":          "ਪਨੀਰ ਪਰਾਂਠਾ",
-        "Mix Parantha":             "ਮਿਕਸ ਪਰਾਂਠਾ",
-        # Desserts
-        "Rasmalai":                 "ਰਸਮਲਾਈ",
-        "Kesar Rasmalai":           "ਕੇਸਰ ਰਸਮਲਾਈ",
-        "Garam Gulab Jamun":        "ਗਰਮ ਗੁਲਾਬ ਜਾਮੁਨ",
-        "Spongey Rasgulla":         "ਰਸਗੁੱਲਾ",
-        "Moong Dal Halwa":          "ਮੂੰਗ ਦਾਲ ਹਲਵਾ",
-        "Garam Gajrela":            "ਗਰਮ ਗਾਜਰੇਲਾ",
-        # Beverages
-        "Mango Lassi":              "ਮੈਂਗੋ ਲੱਸੀ",
-        "Sweet Lassi":              "ਮਿੱਠੀ ਲੱਸੀ",
-        "Salty Lassi":              "ਨਮਕੀਨ ਲੱਸੀ",
-        "Masala Chai":              "ਮਸਾਲਾ ਚਾਹ",
-        "Elachi Chai":              "ਇਲਾਇਚੀ ਚਾਹ",
-        "Gur Chai":                 "ਗੁੜ ਦੀ ਚਾਹ",
-        "Dudh Patti":               "ਦੁੱਧ ਪੱਤੀ",
-        "Badam Milk":               "ਬਾਦਾਮ ਦੁੱਧ",
-        "Mango Faluda":             "ਮੈਂਗੋ ਫਾਲੂਦਾ",
-        "Strawberry Faluda":        "ਸਟ੍ਰਾਬੇਰੀ ਫਾਲੂਦਾ",
-        "Vanilla Faluda":           "ਵਨੀਲਾ ਫਾਲੂਦਾ",
-        "Mango Shake":              "ਮੈਂਗੋ ਸ਼ੇਕ",
-        "Badam Milk":               "ਬਾਦਾਮ ਦੁੱਧ",
-    },
-    "hindi": {
-        # Restaurant name
-        "Parkash Sweets":           "प्रकाश Sweets",
-        # Samosa
-        "Aloo Samosa":              "आलू समोसा",
-        "Noodle Samosa":            "नूडल समोसा",
-        # Classics
-        "Chole Bhatura":            "छोले भटूरे",
-        "Choley Puri":              "छोले पूरी",
-        "Aloo Puri":                "आलू पूरी",
-        # Chaat
-        "Chaat Papdi":              "चाट पापड़ी",
-        "Dahi Bhalla":              "दही भल्ला",
-        "Samosa Choley":            "समोसा छोले",
-        "Tawa Tikki Chaat":         "तवा टिक्की चाट",
-        "Tawa Tikki Choley":        "तवा टिक्की छोले",
-        "Aloo Besan Tikki Chaat":   "आलू बेसन टिक्की चाट",
-        # Pakora
-        "Mix Veg Pakora":           "मिक्स वेज पकौड़ा",
-        "Paneer Pakora":            "पनीर पकौड़ा",
-        "Gobi Pakora":              "गोभी पकौड़ा",
-        "Baingan Pakora":           "बैंगन पकौड़ा",
-        "Mirchi Pakora":            "मिर्ची पकौड़ा",
-        "Hara Bara Kabab":          "हरा भरा कबाब",
-        "Dahi Kabab":               "दही कबाब",
-        "Mushroom Delux":           "मशरूम डीलक्स",
-        "Aloo Cutlet":              "आलू कटलेट",
-        "Aloo Finger":              "आलू फिंगर",
-        "Spring Roll":              "स्प्रिंग रोल",
-        "Tawa Tikki":               "तवा टिक्की",
-        "Aloo Besan Tikki":         "आलू बेसन टिक्की",
-        "Shimla Mirch Pakora":      "शिमला मिर्च पकौड़ा",
-        # Bread Pakora
-        "Aloo Bread Pakora":        "आलू ब्रेड पकौड़ा",
-        "Paneer Aloo Bread Pakora": "पनीर आलू ब्रेड पकौड़ा",
-        "Bread Roll":               "ब्रेड रोल",
-        # Burgers
-        "Aloo Tikki Burger":        "आलू टिक्की बर्गर",
-        "Noodle Burger":            "नूडल बर्गर",
-        "Paneer Tikki Burger":      "पनीर टिक्की बर्गर",
-        # Parantha
-        "Aloo Parantha":            "आलू परांठा",
-        "Gobi Parantha":            "गोभी परांठा",
-        "Muli Parantha":            "मूली परांठा",
-        "Paneer Parantha":          "पनीर परांठा",
-        "Mix Parantha":             "मिक्स परांठा",
-        # Desserts
-        "Rasmalai":                 "रसमलाई",
-        "Kesar Rasmalai":           "केसर रसमलाई",
-        "Garam Gulab Jamun":        "गरम गुलाब जामुन",
-        "Spongey Rasgulla":         "रसगुल्ला",
-        "Moong Dal Halwa":          "मूंग दाल हलवा",
-        "Garam Gajrela":            "गरम गाजरेला",
-        # Beverages
-        "Mango Lassi":              "मैंगो लस्सी",
-        "Sweet Lassi":              "मीठी लस्सी",
-        "Salty Lassi":              "नमकीन लस्सी",
-        "Masala Chai":              "मसाला चाय",
-        "Elachi Chai":              "इलायची चाय",
-        "Gur Chai":                 "गुड़ की चाय",
-        "Dudh Patti":               "दूध पत्ती",
-        "Badam Milk":               "बादाम दूध",
-        "Mango Faluda":             "मैंगो फालूदा",
-        "Strawberry Faluda":        "स्ट्रॉबेरी फालूदा",
-        "Vanilla Faluda":           "वनीला फालूदा",
-        "Mango Shake":              "मैंगो शेक",
-    },
-    "english": {
-        # Phonetic guide — only items English TTS commonly mispronounces
-        "Parkash Sweets":   "Pruh-kaash Sweets",
-        "Chole Bhatura":    "Choh-lay Bhuh-too-rah",
-        "Choley Puri":      "Choh-lay Poo-ree",
-        "Aloo Puri":        "Ah-loo Poo-ree",
-        "Chaat Papdi":      "Chaat Pup-dee",
-        "Dahi Bhalla":      "Duh-hee Bhul-lah",
-        "Samosa Choley":    "Suh-moh-sah Choh-lay",
-        "Tawa Tikki Chaat": "Tah-wah Tik-kee Chaat",
-        "Hara Bara Kabab":  "Huh-rah Buh-rah Kuh-bob",
-        "Baingan Pakora":   "Bain-gun Puh-koh-rah",
-        "Gobi Pakora":      "Goh-bee Puh-koh-rah",
-        "Mirchi Pakora":    "Meer-chee Puh-koh-rah",
-        "Muli Parantha":    "Moo-lee Puh-raan-thah",
-        "Rasmalai":         "Rus-muh-lie",
-        "Kesar Rasmalai":   "Kay-sur Rus-muh-lie",
-        "Garam Gulab Jamun":"Guh-rum Goo-laab Juh-moon",
-        "Spongey Rasgulla": "Rus-goo-lah",
-        "Moong Dal Halwa":  "Moong Daal Hul-wah",
-        "Garam Gajrela":    "Guj-ray-lah",
-        "Elachi Chai":      "Ay-lah-chee Chai",
-        "Gur Chai":         "Gur Chai (rhymes with fur)",
-        "Dudh Patti":       "Doodh Puh-tee",
-        "Mango Faluda":     "Fah-loo-dah",
-        "Badam Milk":       "Bah-dum Milk",
-    },
-}
-
+# ── Pronunciation guide injected into system prompt ───────────────────────────
 
 def _get_pronunciation_guide(language: str) -> str:
     lang = language.strip().lower()
 
     if lang == "punjabi":
         items = MENU_ITEM_PRONUNCIATIONS["punjabi"]
+        pa_name = items.get(RESTAURANT_NAME, "ਪ੍ਰਕਾਸ਼ Sweets")
         lines = " | ".join(f"{en} → {pa}" for en, pa in items.items())
         return (
             "\n## NAMES & MENU ITEMS — GURMUKHI (CRITICAL FOR TTS)\n\n"
-            f"Restaurant name in Gurmukhi: ਪ੍ਰਕਾਸ਼ Sweets — ALWAYS say the restaurant as 'ਪ੍ਰਕਾਸ਼ Sweets', never 'Parkash Sweets'.\n\n"
+            f"Restaurant name in Gurmukhi: {pa_name} — ALWAYS say the restaurant as '{pa_name}', never '{RESTAURANT_NAME}'.\n\n"
             "Write menu item names in Gurmukhi script in your spoken responses. "
             "Soniox Punjabi TTS cannot pronounce Latin-script Indian food names correctly — "
             "Gurmukhi gives native pronunciation. "
@@ -550,10 +136,11 @@ def _get_pronunciation_guide(language: str) -> str:
 
     if lang == "hindi":
         items = MENU_ITEM_PRONUNCIATIONS["hindi"]
+        hi_name = items.get(RESTAURANT_NAME, "प्रकाश Sweets")
         lines = " | ".join(f"{en} → {hi}" for en, hi in items.items())
         return (
             "\n## NAMES & MENU ITEMS — DEVANAGARI (CRITICAL FOR TTS)\n\n"
-            f"Restaurant name in Devanagari: प्रकाश Sweets — ALWAYS say the restaurant as 'प्रकाश Sweets', never 'Parkash Sweets'.\n\n"
+            f"Restaurant name in Devanagari: {hi_name} — ALWAYS say the restaurant as '{hi_name}', never '{RESTAURANT_NAME}'.\n\n"
             "Write menu item names in Devanagari script in your spoken responses. "
             "Soniox Hindi TTS cannot pronounce Latin-script Indian food names correctly — "
             "Devanagari gives native pronunciation. "
@@ -564,26 +151,17 @@ def _get_pronunciation_guide(language: str) -> str:
 
     # English
     items = MENU_ITEM_PRONUNCIATIONS["english"]
+    en_name = items.get(RESTAURANT_NAME, "Pruh-kaash Sweets")
     lines = " | ".join(f"{name} → {ph}" for name, ph in items.items())
     return (
         "\n## PRONUNCIATION GUIDE (ENGLISH TTS)\n\n"
-        "The restaurant name is 'Pruh-kaash Sweets' — say it naturally, not 'Par-kash'.\n\n"
+        f"The restaurant name is '{en_name}' — say it naturally, not 'Par-kash'.\n\n"
         "Use these phonetic spellings for item names so English TTS pronounces them correctly:\n\n"
         f"{lines}"
     )
 
 
-BUSINESS_INFO = """
-Restaurant Name: Parkash Sweets
-Cuisine: Punjabi Indian vegetarian sweets, snacks, chaat, pakora, paranthas, burgers, sandwiches, desserts and beverages
-Locations shown on menu: Kapurthala and Edmonton
-Hours: Monday to Sunday, 11 AM to 10 PM
-Phone: (Ask owner to fill in)
-Accepts: Cash and all major credit cards
-Orders: dine-in, pickup, and delivery if available for the caller's location
-All prices are in Canadian dollars (CAD).
-"""
-
+# ── System message ────────────────────────────────────────────────────────────
 
 def get_system_message(language: str, caller_phone: str = "") -> str:
     if caller_phone:
@@ -837,7 +415,82 @@ Keep this energy throughout — not over the top, just genuinely warm and real.
 """
 
 
-# ─── Tool 0: Transfer Call ────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def normalize_menu_category(value: str) -> str:
+    value_lower = value.strip().lower()
+    if value_lower in MENU:
+        return value_lower
+    return MENU_CATEGORY_ALIASES.get(value_lower, value_lower)
+
+
+def normalize_item_name(value: str) -> str:
+    value_lower = value.strip().lower()
+    return ITEM_ALIASES.get(value_lower, value)
+
+
+def _lookup_price(item_name: str) -> float:
+    """Resolve item name to price using a 4-level fallback chain.
+
+    1. ITEM_ALIASES exact lookup   — known spelling variants
+    2. Exact case-insensitive match — canonical names as-is
+    3. All-tokens subset match      — handles word reorder, extra words
+    4. rapidfuzz token_sort_ratio   — handles plurals, typos, STT drift
+    """
+    name_lower = item_name.strip().lower()
+
+    # 1. Alias → canonical → exact price
+    if name_lower in ITEM_ALIASES:
+        canonical = ITEM_ALIASES[name_lower].lower()
+        for cat_items in MENU.values():
+            for item in cat_items:
+                if item["name"].lower() == canonical:
+                    return item["price"]
+
+    # 2. Direct exact match
+    for cat_items in MENU.values():
+        for item in cat_items:
+            if item["name"].lower() == name_lower:
+                return item["price"]
+
+    # 3. All-tokens subset (handles reorder; pick tightest match, reject ambiguity)
+    def _tokens(s: str) -> set[str]:
+        return set(re.sub(r"[^a-z0-9]", " ", s.lower()).split())
+
+    query_tokens = _tokens(name_lower)
+    if query_tokens:
+        best_price: float | None = None
+        best_extra = 9999
+        ambiguous = False
+        for cat_items in MENU.values():
+            for item in cat_items:
+                item_tokens = _tokens(item["name"])
+                if not query_tokens.issubset(item_tokens):
+                    continue
+                extra = len(item_tokens - query_tokens)
+                if extra < best_extra:
+                    best_extra = extra
+                    best_price = item["price"]
+                    ambiguous = False
+                elif extra == best_extra:
+                    ambiguous = True
+        if best_price is not None and not ambiguous:
+            return best_price
+
+    # 4. Fuzzy match — catches plurals ("pakoras"), typos ("pakoda"), STT drift
+    all_names = [item["name"] for cat_items in MENU.values() for item in cat_items]
+    result = process.extractOne(item_name, all_names, scorer=fuzz.token_sort_ratio)
+    if result and result[1] >= 80:
+        match_name = result[0]
+        for cat_items in MENU.values():
+            for item in cat_items:
+                if item["name"] == match_name:
+                    return item["price"]
+
+    return 0.0
+
+
+# ── Tool 0: Transfer Call ─────────────────────────────────────────────────────
 
 transfer_call_tool_description = ChatCompletionFunctionToolParam(
     type="function",
@@ -872,7 +525,7 @@ transfer_call_tool_description = ChatCompletionFunctionToolParam(
 )
 
 
-# ─── Tool 1: Select Language ──────────────────────────────────────────────────
+# ── Tool 1: Select Language ───────────────────────────────────────────────────
 
 select_language_tool_description = ChatCompletionFunctionToolParam(
     type="function",
@@ -898,7 +551,7 @@ select_language_tool_description = ChatCompletionFunctionToolParam(
 )
 
 
-# ─── Tool 2: Get Menu ─────────────────────────────────────────────────────────
+# ── Tool 2: Get Menu ──────────────────────────────────────────────────────────
 
 get_menu_tool_description = ChatCompletionFunctionToolParam(
     type="function",
@@ -967,8 +620,6 @@ async def get_menu(category: str) -> dict:
     category = normalize_menu_category(category)
 
     if category == "all":
-        # Return a compact category overview instead of the full ~3000-token dump.
-        # If the customer wants a specific category, call get_menu with that category.
         summary = {
             cat: [item["name"] for item in items]
             for cat, items in MENU.items()
@@ -991,7 +642,7 @@ async def get_menu(category: str) -> dict:
     return {"error": "Category not found"}
 
 
-# ─── Tool 3: Check Item Availability ──────────────────────────────────────────
+# ── Tool 3: Check Item Availability ──────────────────────────────────────────
 
 check_item_availability_tool_description = ChatCompletionFunctionToolParam(
     type="function",
@@ -1019,13 +670,11 @@ check_item_availability_tool_description = ChatCompletionFunctionToolParam(
 async def check_item_availability(item_name: str) -> dict:
     print(f"Running Tool: check_item_availability(item_name='{item_name}')")
 
-    # Resolve alias first (e.g. "gulab jamun" → "Garam Gulab Jamun (2 pcs)")
     canonical_name = normalize_item_name(item_name)
     search_lower = canonical_name.strip().lower()
 
-    # Exact match
-    for cat, items in MENU.items():
-        for item in items:
+    for cat, cat_items in MENU.items():
+        for item in cat_items:
             if item["name"].lower() == search_lower:
                 return {
                     "available": True,
@@ -1035,14 +684,9 @@ async def check_item_availability(item_name: str) -> dict:
                     "description": item.get("description", ""),
                 }
 
-    # Fallback: use _lookup_price which handles all-tokens matching
     price = _lookup_price(item_name)
     if price:
-        return {
-            "available": True,
-            "item": canonical_name,
-            "price": price,
-        }
+        return {"available": True, "item": canonical_name, "price": price}
 
     return {
         "available": False,
@@ -1053,19 +697,7 @@ async def check_item_availability(item_name: str) -> dict:
     }
 
 
-def normalize_menu_category(value: str) -> str:
-    value_lower = value.strip().lower()
-    if value_lower in MENU:
-        return value_lower
-    return MENU_CATEGORY_ALIASES.get(value_lower, value_lower)
-
-
-def normalize_item_name(value: str) -> str:
-    value_lower = value.strip().lower()
-    return ITEM_ALIASES.get(value_lower, value)
-
-
-# ─── Tool 4: Place Order ───────────────────────────────────────────────────────
+# ── Tool 4: Place Order ───────────────────────────────────────────────────────
 
 place_order_tool_description = ChatCompletionFunctionToolParam(
     type="function",
@@ -1110,11 +742,6 @@ place_order_tool_description = ChatCompletionFunctionToolParam(
                     "type": "number",
                     "description": "Total order amount in CAD.",
                 },
-                "order_type": {
-                    "type": "string",
-                    "description": "How the customer wants to receive the order.",
-                    "enum": ["dine_in", "pickup", "delivery"],
-                },
                 "delivery_address": {
                     "type": "string",
                     "description": "Delivery address. Required only for delivery orders.",
@@ -1128,57 +755,6 @@ place_order_tool_description = ChatCompletionFunctionToolParam(
         },
     },
 )
-
-
-def _lookup_price(item_name: str) -> float:
-    """Look up menu price: alias → exact → all-tokens match."""
-    import re as _re
-    name_lower = item_name.strip().lower()
-
-    # 1. Alias table → canonical name → exact match
-    if name_lower in ITEM_ALIASES:
-        canonical = ITEM_ALIASES[name_lower].lower()
-        for category_items in MENU.values():
-            for item in category_items:
-                if item["name"].lower() == canonical:
-                    return item["price"]
-
-    # 2. Exact name match (case-insensitive)
-    for category_items in MENU.values():
-        for item in category_items:
-            if item["name"].lower() == name_lower:
-                return item["price"]
-
-    # 3. All-tokens match: every word in the query must appear in the item
-    #    name. Pick the item with the fewest extra words (tightest match).
-    #    If two items tie, the query is ambiguous → return 0.0 so the order
-    #    fails loudly instead of silently charging the wrong price.
-    def _tokens(s: str) -> set:
-        return set(_re.sub(r"[^a-z0-9]", " ", s.lower()).split())
-
-    query_tokens = _tokens(name_lower)
-    if query_tokens:
-        best_price: float | None = None
-        best_extra: int = 9999
-        ambiguous = False
-
-        for category_items in MENU.values():
-            for item in category_items:
-                item_tokens = _tokens(item["name"])
-                if not query_tokens.issubset(item_tokens):
-                    continue
-                extra = len(item_tokens - query_tokens)
-                if extra < best_extra:
-                    best_extra = extra
-                    best_price = item["price"]
-                    ambiguous = False
-                elif extra == best_extra:
-                    ambiguous = True
-
-        if best_price is not None and not ambiguous:
-            return best_price
-
-    return 0.0
 
 
 async def place_order(
@@ -1198,17 +774,14 @@ async def place_order(
         f"items={[i['name'] for i in items]})"
     )
 
-    # Reject empty or obviously invalid orders.
     if not items:
         return {"success": False, "error": "No items in order. Ask the customer what they would like."}
 
-    # Validate and clamp quantities.
     for item in items:
         qty = item.get("quantity", 1)
         if not isinstance(qty, int) or qty < 1:
             item["quantity"] = 1
 
-    # Fill in prices from menu; reject if any item is not found.
     not_found = []
     for item in items:
         if not item.get("price"):
@@ -1226,10 +799,12 @@ async def place_order(
         }
 
     total_amount = sum(item["price"] * item.get("quantity", 1) for item in items)
-
     order_id = f"PS-{datetime.now().strftime('%H%M%S')}"
-
-    wait_time = "20-30 minutes" if order_type == "pickup" else "40-60 minutes" if order_type == "delivery" else "10-15 minutes"
+    wait_time = (
+        "20-30 minutes" if order_type == "pickup"
+        else "40-60 minutes" if order_type == "delivery"
+        else "10-15 minutes"
+    )
 
     n8n_url = os.getenv("N8N_WEBHOOK_URL", "")
     if n8n_url:
@@ -1269,7 +844,7 @@ async def place_order(
     }
 
 
-# ─── Register Tools ────────────────────────────────────────────────────────────
+# ── Register Tools ────────────────────────────────────────────────────────────
 
 def get_tools(state: RestaurantState):
     async def transfer_call(reason: str) -> str:

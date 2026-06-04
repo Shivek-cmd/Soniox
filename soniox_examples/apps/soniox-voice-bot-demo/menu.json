@@ -1,0 +1,660 @@
+{
+  "business": {
+    "name": "Parkash Sweets",
+    "spoken_name": "Prakaash Sweets",
+    "cuisine": "Punjabi Indian vegetarian sweets, snacks, chaat, pakora, paranthas, burgers, sandwiches, desserts and beverages",
+    "locations": "Kapurthala and Edmonton",
+    "hours": "Monday to Sunday, 11 AM to 10 PM",
+    "phone": "Ask owner to fill in",
+    "payment": "Cash and all major credit cards",
+    "order_types": "dine-in, pickup, and delivery if available for the caller's location",
+    "currency": "CAD",
+    "pronunciation": {
+      "punjabi": "ਪ੍ਰਕਾਸ਼ Sweets",
+      "hindi": "प्रकाश Sweets",
+      "english": "Pruh-kaash Sweets"
+    }
+  },
+
+  "category_aliases": {
+    "starter":         "all_snacks",
+    "starters":        "all_snacks",
+    "snack":           "all_snacks",
+    "snacks":          "all_snacks",
+    "appetizer":       "all_snacks",
+    "appetizers":      "all_snacks",
+    "fried":           "all_snacks",
+    "classic":         "parkash_classic",
+    "parkash classic": "parkash_classic",
+    "main":            "parkash_classic",
+    "mains":           "parkash_classic",
+    "main course":     "parkash_classic",
+    "meal":            "parkash_classic",
+    "chaat":           "chaat",
+    "chat":            "chaat",
+    "samosa":          "samosa",
+    "samosas":         "samosa",
+    "samosay":         "samosa",
+    "pakora":          "pakora",
+    "pakoras":         "pakora",
+    "pakoda":          "pakora",
+    "pakodas":         "pakora",
+    "crispy":          "pakora",
+    "fritter":         "pakora",
+    "fritters":        "pakora",
+    "platter":         "pakora",
+    "bread pakora":    "bread_pakora",
+    "bread":           "bread_pakora",
+    "roll":            "bread_pakora",
+    "rolls":           "bread_pakora",
+    "burger":          "burger_sandwich",
+    "burgers":         "burger_sandwich",
+    "sandwich":        "burger_sandwich",
+    "sandwiches":      "burger_sandwich",
+    "parantha":        "parantha",
+    "paranthas":       "parantha",
+    "paratha":         "parantha",
+    "parathas":        "parantha",
+    "sweet":           "desserts",
+    "sweets":          "desserts",
+    "dessert":         "desserts",
+    "desserts":        "desserts",
+    "mithai":          "desserts",
+    "mithais":         "desserts",
+    "halwa":           "desserts",
+    "meetha":          "desserts",
+    "shake":           "shake_faluda",
+    "shakes":          "shake_faluda",
+    "milkshake":       "shake_faluda",
+    "milkshakes":      "shake_faluda",
+    "faluda":          "shake_faluda",
+    "falooda":         "shake_faluda",
+    "drink":           "beverages",
+    "drinks":          "beverages",
+    "beverage":        "beverages",
+    "beverages":       "beverages",
+    "chai":            "beverages",
+    "tea":             "beverages",
+    "lassi":           "beverages",
+    "coffee":          "beverages",
+    "side":            "sides",
+    "sides":           "sides",
+    "extra":           "sides",
+    "add on":          "sides",
+    "add-on":          "sides"
+  },
+
+  "categories": [
+    {
+      "id": "samosa",
+      "label": "Samosa",
+      "items": [
+        {
+          "name": "Aloo Samosa (2 pcs)",
+          "price": 3.00,
+          "description": "Fried dough stuffed with spiced potato and peas.",
+          "terms": ["aloo samosa", "samosa", "regular samosa", "aloo samosay", "ਆਲੂ ਸਮੋਸਾ", "आलू समोसा"],
+          "pronunciation": { "punjabi": "ਆਲੂ ਸਮੋਸਾ", "hindi": "आलू समोसा" }
+        },
+        {
+          "name": "Noodle Samosa (2 pcs)",
+          "price": 4.50,
+          "description": "Fried dough stuffed with noodles and juicy veggies with soya sauce and vinegar.",
+          "terms": ["noodle samosa", "ਨੂਡਲ ਸਮੋਸਾ", "नूडल समोसा"],
+          "pronunciation": { "punjabi": "ਨੂਡਲ ਸਮੋਸਾ", "hindi": "नूडल समोसा" }
+        }
+      ]
+    },
+    {
+      "id": "parkash_classic",
+      "label": "Classics",
+      "items": [
+        {
+          "name": "Chole Bhatura",
+          "price": 7.99,
+          "description": "Chickpeas curry with two fried bhature.",
+          "terms": ["chole bhatura", "chole bhature", "choley bhatura", "chhole bhatura", "chhole bhature", "ਛੋਲੇ ਭਟੂਰੇ", "छोले भटूरे"],
+          "pronunciation": { "punjabi": "ਛੋਲੇ ਭਟੂਰੇ", "hindi": "छोले भटूरे", "english": "Choh-lay Bhuh-too-rah" }
+        },
+        {
+          "name": "Choley Puri",
+          "price": 7.99,
+          "description": "Chickpeas curry with three puris.",
+          "terms": ["choley puri", "chole puri", "ਛੋਲੇ ਪੂਰੀ", "छोले पूरी"],
+          "pronunciation": { "punjabi": "ਛੋਲੇ ਪੂਰੀ", "hindi": "छोले पूरी", "english": "Choh-lay Poo-ree" }
+        },
+        {
+          "name": "Aloo Puri",
+          "price": 7.99,
+          "description": "Tangy aloo curry with three puris.",
+          "terms": ["aloo puri", "ਆਲੂ ਪੂਰੀ", "आलू पूरी"],
+          "pronunciation": { "punjabi": "ਆਲੂ ਪੂਰੀ", "hindi": "आलू पूरी", "english": "Ah-loo Poo-ree" }
+        }
+      ]
+    },
+    {
+      "id": "chaat",
+      "label": "Chaat",
+      "items": [
+        {
+          "name": "Chaat Papdi",
+          "price": 5.99,
+          "description": "Crispy chips with potatoes, onions, chickpeas, yogurt, mint and tamarind chutney.",
+          "terms": ["chaat papdi", "papdi chaat", "papri chaat", "chaat papri", "ਚਾਟ ਪਾਪੜੀ", "चाट पापड़ी"],
+          "pronunciation": { "punjabi": "ਚਾਟ ਪਾਪੜੀ", "hindi": "चाट पापड़ी", "english": "Chaat Pup-dee" }
+        },
+        {
+          "name": "Dahi Bhalla",
+          "price": 5.99,
+          "description": "Soft lentil dumplings in chilled yogurt with tamarind chutney and spices.",
+          "terms": ["dahi bhalla", "ਦਹੀ ਭੱਲਾ", "दही भल्ला"],
+          "pronunciation": { "punjabi": "ਦਹੀ ਭੱਲਾ", "hindi": "दही भल्ला", "english": "Duh-hee Bhul-lah" }
+        },
+        {
+          "name": "Samosa Choley",
+          "price": 6.50,
+          "description": "Two aloo samosas with spicy chickpeas, yogurt and chutney.",
+          "terms": ["samosa choley", "samosa chole", "samosa chaat", "ਸਮੋਸਾ ਛੋਲੇ", "समोसा छोले"],
+          "pronunciation": { "punjabi": "ਸਮੋਸਾ ਛੋਲੇ", "hindi": "समोसा छोले", "english": "Suh-moh-sah Choh-lay" }
+        },
+        {
+          "name": "Tawa Tikki Chaat",
+          "price": 6.00,
+          "description": "Crisp potato patty topped with yogurt, tamarind, mint sauce and salad.",
+          "terms": ["tawa tikki chaat", "tikki chaat", "ਤਵਾ ਟਿੱਕੀ ਚਾਟ", "तवा टिक्की चाट"],
+          "pronunciation": { "punjabi": "ਤਵਾ ਟਿੱਕੀ ਚਾਟ", "hindi": "तवा टिक्की चाट", "english": "Tah-wah Tik-kee Chaat" }
+        },
+        {
+          "name": "Tawa Tikki Choley",
+          "price": 7.50,
+          "description": "Crisp potato patty with chickpea curry, yogurt, tamarind, mint sauce and salad.",
+          "terms": ["tawa tikki choley", "tikki choley", "tikki chole", "ਤਵਾ ਟਿੱਕੀ ਛੋਲੇ", "तवा टिक्की छोले"],
+          "pronunciation": { "punjabi": "ਤਵਾ ਟਿੱਕੀ ਛੋਲੇ", "hindi": "तवा टिक्की छोले" }
+        },
+        {
+          "name": "Aloo Besan Tikki Chaat",
+          "price": 5.00,
+          "description": "Potato patty made with peas, onions, gram flour and spices with yogurt, tamarind and mint sauce.",
+          "terms": ["aloo besan tikki chaat", "besan tikki chaat", "aloo tikki chaat", "ਆਲੂ ਬੇਸਣ ਟਿੱਕੀ ਚਾਟ", "आलू बेसन टिक्की चाट"],
+          "pronunciation": { "punjabi": "ਆਲੂ ਬੇਸਣ ਟਿੱਕੀ ਚਾਟ", "hindi": "आलू बेसन टिक्की चाट" }
+        }
+      ]
+    },
+    {
+      "id": "pakora",
+      "label": "Pakora",
+      "items": [
+        {
+          "name": "Mix Veg Pakora",
+          "price": 8.50,
+          "description": "Spinach fritters with gram flour, spices, cauliflower, onions, potatoes and spinach.",
+          "terms": ["mix veg pakora", "veg pakora", "mix pakora", "mixed pakora", "ਮਿਕਸ ਵੈਜ ਪਕੌੜਾ", "मिक्स वेज पकौड़ा"],
+          "pronunciation": { "punjabi": "ਮਿਕਸ ਵੈਜ ਪਕੌੜਾ", "hindi": "मिक्स वेज पकौड़ा" }
+        },
+        {
+          "name": "Baingan Pakora",
+          "price": 8.50,
+          "description": "Thin slices of eggplant dipped in spiced gram flour batter and fried.",
+          "terms": ["baingan pakora", "eggplant pakora", "ਬੈਂਗਣ ਪਕੌੜਾ", "बैंगन पकौड़ा"],
+          "pronunciation": { "punjabi": "ਬੈਂਗਣ ਪਕੌੜਾ", "hindi": "बैंगन पकौड़ा", "english": "Bain-gun Puh-koh-rah" }
+        },
+        {
+          "name": "Spring Roll",
+          "price": 8.00,
+          "description": "Cabbage, noodles, carrots and onions wrapped in a flaky crispy roll.",
+          "terms": ["spring roll"],
+          "pronunciation": { "punjabi": "ਸਪ੍ਰਿੰਗ ਰੋਲ", "hindi": "स्प्रिंग रोल" }
+        },
+        {
+          "name": "Aloo Cutlet",
+          "price": 10.50,
+          "description": "Crispy mashed potato with spices and herbs.",
+          "terms": ["aloo cutlet", "cutlet"],
+          "pronunciation": { "punjabi": "ਆਲੂ ਕਟਲੇਟ", "hindi": "आलू कटलेट" }
+        },
+        {
+          "name": "Parkash Platter",
+          "price": 15.99,
+          "description": "Assorted vegetable pakoras, paneer, gobi, aloo fingers, baingan, aloo cutlets, hara bara kababs, mushroom, bread rolls, dahi kabab and mirchi.",
+          "terms": ["parkash platter", "platter"],
+          "pronunciation": { "punjabi": "ਪ੍ਰਕਾਸ਼ ਪਲੈਟਰ", "hindi": "प्रकाश प्लैटर" }
+        },
+        {
+          "name": "Paneer Pakora",
+          "price": 11.50,
+          "description": "Indian cottage cheese pieces coated in spiced gram batter and deep fried.",
+          "terms": ["paneer pakora", "paneer pakoda", "paner pakora", "cottage cheese pakora", "ਪਨੀਰ ਪਕੌੜਾ", "पनीर पकौड़ा"],
+          "pronunciation": { "punjabi": "ਪਨੀਰ ਪਕੌੜਾ", "hindi": "पनीर पकौड़ा" }
+        },
+        {
+          "name": "Mirchi Pakora",
+          "price": 10.50,
+          "description": "Stuffed green chili fritters with gram flour, spices and herbs.",
+          "terms": ["mirchi pakora", "chili pakora", "ਮਿਰਚੀ ਪਕੌੜਾ", "मिर्ची पकौड़ा"],
+          "pronunciation": { "punjabi": "ਮਿਰਚੀ ਪਕੌੜਾ", "hindi": "मिर्ची पकौड़ा", "english": "Meer-chee Puh-koh-rah" }
+        },
+        {
+          "name": "Hara Bara Kabab",
+          "price": 10.50,
+          "description": "Spinach, green peas and potatoes shaped into crisp pan-fried patties.",
+          "terms": ["hara bara kabab", "hara bhara kabab", "hara bhara", "hara bara", "ਹਰਾ ਭਰਾ ਕਬਾਬ", "हरा भरा कबाब"],
+          "pronunciation": { "punjabi": "ਹਰਾ ਭਰਾ ਕਬਾਬ", "hindi": "हरा भरा कबाब", "english": "Huh-rah Buh-rah Kuh-bob" }
+        },
+        {
+          "name": "Gobi Pakora",
+          "price": 10.50,
+          "description": "Cauliflower fritters with gram flour, spices and herbs.",
+          "terms": ["gobi pakora", "cauliflower pakora", "ਗੋਭੀ ਪਕੌੜਾ", "गोभी पकौड़ा"],
+          "pronunciation": { "punjabi": "ਗੋਭੀ ਪਕੌੜਾ", "hindi": "गोभी पकौड़ा", "english": "Goh-bee Puh-koh-rah" }
+        },
+        {
+          "name": "Dahi Kabab",
+          "price": 9.00,
+          "description": "Creamy yogurt patties with herbs, spices and flour, lightly pan fried.",
+          "terms": ["dahi kabab", "ਦਹੀ ਕਬਾਬ", "दही कबाब"],
+          "pronunciation": { "punjabi": "ਦਹੀ ਕਬਾਬ", "hindi": "दही कबाब" }
+        },
+        {
+          "name": "Mushroom Delux",
+          "price": 9.00,
+          "description": "Mushrooms dipped in spicy gram flour batter and fried crisp. Six pieces per order.",
+          "terms": ["mushroom delux", "mushroom", "mushroom pakora", "mushrooms"],
+          "pronunciation": { "punjabi": "ਮਸ਼ਰੂਮ ਡੀਲਕਸ", "hindi": "मशरूम डीलक्स" }
+        },
+        {
+          "name": "Aloo Besan Tikki (2 pcs)",
+          "price": 3.00,
+          "description": "Crisp potato patties with peas, onions, gram flour and spices.",
+          "terms": ["aloo besan tikki", "besan tikki"],
+          "pronunciation": { "punjabi": "ਆਲੂ ਬੇਸਣ ਟਿੱਕੀ", "hindi": "आलू बेसन टिक्की" }
+        },
+        {
+          "name": "Shimla Mirch Pakora",
+          "price": 5.00,
+          "description": "Capsicum rings filled with spiced potato stuffing and fried in gram flour batter. Two pieces per order.",
+          "terms": ["shimla mirch pakora", "shimla mirch", "capsicum pakora"],
+          "pronunciation": { "punjabi": "ਸ਼ਿਮਲਾ ਮਿਰਚ ਪਕੌੜਾ", "hindi": "शिमला मिर्च पकौड़ा" }
+        },
+        {
+          "name": "Aloo Finger",
+          "price": 8.50,
+          "description": "Golden brown crispy potato fingers.",
+          "terms": ["aloo finger", "aloo fingers", "potato fingers"],
+          "pronunciation": { "punjabi": "ਆਲੂ ਫਿੰਗਰ", "hindi": "आलू फिंगर" }
+        },
+        {
+          "name": "Tawa Tikki (2 pcs)",
+          "price": 4.00,
+          "description": "Golden fried potato patties, crisp outside and soft inside.",
+          "terms": ["tawa tikki"],
+          "pronunciation": { "punjabi": "ਤਵਾ ਟਿੱਕੀ", "hindi": "तवा टिक्की" }
+        }
+      ]
+    },
+    {
+      "id": "bread_pakora",
+      "label": "Bread Pakora",
+      "items": [
+        {
+          "name": "Aloo Bread Pakora",
+          "price": 3.00,
+          "description": "Spiced potato stuffing between two slices of white bread. Two pieces per order.",
+          "terms": ["aloo bread pakora", "aloo bread"],
+          "pronunciation": { "punjabi": "ਆਲੂ ਬ੍ਰੈੱਡ ਪਕੌੜਾ", "hindi": "आलू ब्रेड पकौड़ा" }
+        },
+        {
+          "name": "Paneer Aloo Bread Pakora",
+          "price": 5.00,
+          "description": "Bread fritters with potato and paneer. Two pieces per order.",
+          "terms": ["paneer aloo bread pakora", "paneer bread pakora", "paneer aloo bread", "paneer bread"],
+          "pronunciation": { "punjabi": "ਪਨੀਰ ਆਲੂ ਬ੍ਰੈੱਡ ਪਕੌੜਾ", "hindi": "पनीर आलू ब्रेड पकौड़ा" }
+        },
+        {
+          "name": "Bread Roll",
+          "price": 3.00,
+          "description": "Crispy outside with tangy savory potato stuffing. Two pieces per order.",
+          "terms": ["bread roll"],
+          "pronunciation": { "punjabi": "ਬ੍ਰੈੱਡ ਰੋਲ", "hindi": "ब्रेड रोल" }
+        }
+      ]
+    },
+    {
+      "id": "burger_sandwich",
+      "label": "Burgers & Sandwiches",
+      "items": [
+        {
+          "name": "Aloo Tikki Burger",
+          "price": 6.50,
+          "description": "Spiced potato patty with lettuce, sliced onions and spicy mayo.",
+          "terms": ["aloo tikki burger", "aloo burger", "tikki burger"],
+          "pronunciation": { "punjabi": "ਆਲੂ ਟਿੱਕੀ ਬਰਗਰ", "hindi": "आलू टिक्की बर्गर" }
+        },
+        {
+          "name": "Noodle Burger",
+          "price": 7.50,
+          "description": "Spiced aloo patty with Asian-style noodles, cucumber, onion and signature mayo.",
+          "terms": ["noodle burger"],
+          "pronunciation": { "punjabi": "ਨੂਡਲ ਬਰਗਰ", "hindi": "नूडल बर्गर" }
+        },
+        {
+          "name": "Paneer Tikki Burger",
+          "price": 8.50,
+          "description": "Spicy marinated paneer tikki with lettuce, onions and signature sauce.",
+          "terms": ["paneer tikki burger", "paneer burger"],
+          "pronunciation": { "punjabi": "ਪਨੀਰ ਟਿੱਕੀ ਬਰਗਰ", "hindi": "पनीर टिक्की बर्गर" }
+        },
+        {
+          "name": "Grilled Cheese Sandwich",
+          "price": 5.50,
+          "description": "Golden toasted bread with melted cheese.",
+          "terms": ["grilled cheese sandwich", "grilled cheese", "cheese sandwich"]
+        },
+        {
+          "name": "Super Veggie Sandwich",
+          "price": 6.99,
+          "description": "Red onion, capsicum, carrots, sweet corn, shredded cheese, spicy mayo, seasoning and oregano.",
+          "terms": ["super veggie sandwich", "veggie sandwich", "veg sandwich"]
+        },
+        {
+          "name": "Sweet Corn Sandwich",
+          "price": 6.99,
+          "description": "Sweet corn, shredded cheese, signature tangy sauce, seasoning and oregano.",
+          "terms": ["sweet corn sandwich", "corn sandwich"]
+        },
+        {
+          "name": "Paneer Mayo Sandwich",
+          "price": 7.99,
+          "description": "Paneer cubes, shredded cheese, sweet corn, capsicum, carrot, onion, spicy mayo, seasoning and oregano.",
+          "terms": ["paneer mayo sandwich", "paneer mayo", "paneer sandwich"]
+        },
+        {
+          "name": "Coleslaw Sandwich - Kids Size",
+          "price": 5.00,
+          "description": "White bread with eggless mayo, carrots, cabbage, black pepper and salt.",
+          "terms": ["coleslaw sandwich", "kids sandwich", "coleslaw sandwich kids size"]
+        },
+        {
+          "name": "Triple Layer Sandwich Add On",
+          "price": 1.00,
+          "description": "Add a third layer to any sandwich.",
+          "terms": ["triple layer", "triple layer sandwich", "add on layer"]
+        }
+      ]
+    },
+    {
+      "id": "parantha",
+      "label": "Parantha",
+      "items": [
+        {
+          "name": "Aloo Parantha",
+          "price": 4.00,
+          "description": "Flatbread stuffed with spiced mashed potatoes, served with mix pickle.",
+          "terms": ["aloo parantha", "aloo paratha", "ਆਲੂ ਪਰਾਂਠਾ", "आलू परांठा"],
+          "pronunciation": { "punjabi": "ਆਲੂ ਪਰਾਂਠਾ", "hindi": "आलू परांठा" }
+        },
+        {
+          "name": "Gobi Parantha",
+          "price": 4.50,
+          "description": "Flatbread stuffed with spiced grated cauliflower, served with mix pickle.",
+          "terms": ["gobi parantha", "gobi paratha", "ਗੋਭੀ ਪਰਾਂਠਾ", "गोभी परांठा"],
+          "pronunciation": { "punjabi": "ਗੋਭੀ ਪਰਾਂਠਾ", "hindi": "गोभी परांठा" }
+        },
+        {
+          "name": "Muli Parantha",
+          "price": 4.50,
+          "description": "Flatbread stuffed with spiced grated radish, served with mix pickle.",
+          "terms": ["muli parantha", "mooli parantha", "muli paratha", "mooli paratha", "ਮੂਲੀ ਪਰਾਂਠਾ", "मूली परांठा"],
+          "pronunciation": { "punjabi": "ਮੂਲੀ ਪਰਾਂਠਾ", "hindi": "मूली परांठा", "english": "Moo-lee Puh-raan-thah" }
+        },
+        {
+          "name": "Paneer Parantha",
+          "price": 4.99,
+          "description": "Flatbread stuffed with spiced Indian cottage cheese, served with mix pickle.",
+          "terms": ["paneer parantha", "paneer paratha", "ਪਨੀਰ ਪਰਾਂਠਾ", "पनीर परांठा"],
+          "pronunciation": { "punjabi": "ਪਨੀਰ ਪਰਾਂਠਾ", "hindi": "पनीर परांठा" }
+        },
+        {
+          "name": "Mix Parantha",
+          "price": 4.99,
+          "description": "Flatbread stuffed with potato, cauliflower, paneer and radish, served with mix pickle.",
+          "terms": ["mix parantha", "mix paratha", "ਮਿਕਸ ਪਰਾਂਠਾ", "मिक्स परांठा"],
+          "pronunciation": { "punjabi": "ਮਿਕਸ ਪਰਾਂਠਾ", "hindi": "मिक्स परांठा" }
+        }
+      ]
+    },
+    {
+      "id": "desserts",
+      "label": "Desserts",
+      "items": [
+        {
+          "name": "Rasmalai (2 pcs)",
+          "price": 4.00,
+          "description": "Soft cheese dumplings soaked in creamy cardamom-saffron milk.",
+          "terms": ["rasmalai", "ਰਸਮਲਾਈ", "रसमलाई"],
+          "pronunciation": { "punjabi": "ਰਸਮਲਾਈ", "hindi": "रसमलाई", "english": "Rus-muh-lie" }
+        },
+        {
+          "name": "Kesar Rasmalai (6 pcs)",
+          "price": 5.99,
+          "description": "Paneer dumplings soaked in saffron milk.",
+          "terms": ["kesar rasmalai", "saffron rasmalai", "ਕੇਸਰ ਰਸਮਲਾਈ", "केसर रसमलाई"],
+          "pronunciation": { "punjabi": "ਕੇਸਰ ਰਸਮਲਾਈ", "hindi": "केसर रसमलाई", "english": "Kay-sur Rus-muh-lie" }
+        },
+        {
+          "name": "Garam Gulab Jamun (2 pcs)",
+          "price": 3.00,
+          "description": "Fried dough balls with almond inside, served in warm sugar syrup.",
+          "terms": ["gulab jamun", "garam gulab jamun", "ਗੁਲਾਬ ਜਾਮੁਨ", "गुलाब जामुन"],
+          "pronunciation": { "punjabi": "ਗਰਮ ਗੁਲਾਬ ਜਾਮੁਨ", "hindi": "गरम गुलाब जामुन", "english": "Guh-rum Goo-laab Juh-moon" }
+        },
+        {
+          "name": "Spongey Rasgulla (2 pcs)",
+          "price": 3.00,
+          "description": "Soft round dumplings in sugar syrup.",
+          "terms": ["rasgulla", "spongey rasgulla", "ਰਸਗੁੱਲਾ", "रसगुल्ला"],
+          "pronunciation": { "punjabi": "ਰਸਗੁੱਲਾ", "hindi": "रसगुल्ला", "english": "Rus-goo-lah" }
+        },
+        {
+          "name": "Moong Dal Halwa - 8 oz",
+          "price": 5.50,
+          "description": "Traditional dessert made from yellow moong dal, slow cooked with ghee, sugar and nuts.",
+          "terms": ["moong dal halwa", "dal halwa", "ਮੂੰਗ ਦਾਲ ਹਲਵਾ", "मूंग दाल हलवा"],
+          "pronunciation": { "punjabi": "ਮੂੰਗ ਦਾਲ ਹਲਵਾ", "hindi": "मूंग दाल हलवा", "english": "Moong Daal Hul-wah" }
+        },
+        {
+          "name": "Garam Gajrela - 8 oz",
+          "price": 4.50,
+          "description": "Fresh carrots cooked in milk with sugar, almonds, cashews, mawa and cardamom.",
+          "terms": ["gajrela", "garam gajrela", "gajar halwa", "gajar ka halwa", "carrot halwa", "ਗਾਜਰੇਲਾ", "गाजरेला"],
+          "pronunciation": { "punjabi": "ਗਰਮ ਗਾਜਰੇਲਾ", "hindi": "गरम गाजरेला", "english": "Guj-ray-lah" }
+        }
+      ]
+    },
+    {
+      "id": "shake_faluda",
+      "label": "Shakes & Faluda",
+      "items": [
+        {
+          "name": "Mango Shake",
+          "price": 5.50,
+          "description": "",
+          "terms": ["mango shake"],
+          "pronunciation": { "punjabi": "ਮੈਂਗੋ ਸ਼ੇਕ", "hindi": "मैंगो शेक" }
+        },
+        {
+          "name": "Strawberry Shake",
+          "price": 5.50,
+          "description": "",
+          "terms": ["strawberry shake"]
+        },
+        {
+          "name": "Oreo Shake",
+          "price": 5.50,
+          "description": "",
+          "terms": ["oreo shake"]
+        },
+        {
+          "name": "Chocolate Shake",
+          "price": 5.50,
+          "description": "",
+          "terms": ["chocolate shake", "choco shake"]
+        },
+        {
+          "name": "Vanilla Shake",
+          "price": 5.50,
+          "description": "",
+          "terms": ["vanilla shake"]
+        },
+        {
+          "name": "Mango Faluda",
+          "price": 8.50,
+          "description": "",
+          "terms": ["mango faluda", "faluda", "falooda", "ਮੈਂਗੋ ਫਾਲੂਦਾ", "मैंगो फालूदा"],
+          "pronunciation": { "punjabi": "ਮੈਂਗੋ ਫਾਲੂਦਾ", "hindi": "मैंगो फालूदा", "english": "Fah-loo-dah" }
+        },
+        {
+          "name": "Strawberry Faluda",
+          "price": 8.50,
+          "description": "",
+          "terms": ["strawberry faluda", "ਸਟ੍ਰਾਬੇਰੀ ਫਾਲੂਦਾ"],
+          "pronunciation": { "punjabi": "ਸਟ੍ਰਾਬੇਰੀ ਫਾਲੂਦਾ", "hindi": "स्ट्रॉबेरी फालूदा" }
+        },
+        {
+          "name": "Vanilla Faluda",
+          "price": 8.50,
+          "description": "",
+          "terms": ["vanilla faluda", "ਵਨੀਲਾ ਫਾਲੂਦਾ"],
+          "pronunciation": { "punjabi": "ਵਨੀਲਾ ਫਾਲੂਦਾ", "hindi": "वनीला फालूदा" }
+        }
+      ]
+    },
+    {
+      "id": "beverages",
+      "label": "Drinks",
+      "items": [
+        {
+          "name": "Masala Chai",
+          "price": 1.99,
+          "description": "",
+          "terms": ["masala chai", "chai", "tea", "ਮਸਾਲਾ ਚਾਹ", "मसाला चाय"],
+          "pronunciation": { "punjabi": "ਮਸਾਲਾ ਚਾਹ", "hindi": "मसाला चाय" }
+        },
+        {
+          "name": "Elachi Chai",
+          "price": 2.99,
+          "description": "",
+          "terms": ["elachi chai", "cardamom chai", "ਇਲਾਇਚੀ ਚਾਹ", "इलायची चाय"],
+          "pronunciation": { "punjabi": "ਇਲਾਇਚੀ ਚਾਹ", "hindi": "इलायची चाय", "english": "Ay-lah-chee Chai" }
+        },
+        {
+          "name": "Gur Chai",
+          "price": 2.99,
+          "description": "",
+          "terms": ["gur chai", "jaggery chai", "ਗੁੜ ਦੀ ਚਾਹ", "गुड़ की चाय"],
+          "pronunciation": { "punjabi": "ਗੁੜ ਦੀ ਚਾਹ", "hindi": "गुड़ की चाय", "english": "Gur Chai (rhymes with fur)" }
+        },
+        {
+          "name": "Dudh Patti",
+          "price": 2.99,
+          "description": "",
+          "terms": ["dudh patti", "doodh patti", "ਦੁੱਧ ਪੱਤੀ", "दूध पत्ती"],
+          "pronunciation": { "punjabi": "ਦੁੱਧ ਪੱਤੀ", "hindi": "दूध पत्ती", "english": "Doodh Puh-tee" }
+        },
+        {
+          "name": "Coffee - Indian Style",
+          "price": 2.99,
+          "description": "",
+          "terms": ["coffee", "indian coffee", "coffee indian style"]
+        },
+        {
+          "name": "Sweet Lassi",
+          "price": 4.49,
+          "description": "",
+          "terms": ["sweet lassi", "ਮਿੱਠੀ ਲੱਸੀ", "मीठी लस्सी"],
+          "pronunciation": { "punjabi": "ਮਿੱਠੀ ਲੱਸੀ", "hindi": "मीठी लस्सी" }
+        },
+        {
+          "name": "Salty Lassi",
+          "price": 4.49,
+          "description": "",
+          "terms": ["salty lassi", "namkeen lassi", "salt lassi", "ਨਮਕੀਨ ਲੱਸੀ", "नमकीन लस्सी"],
+          "pronunciation": { "punjabi": "ਨਮਕੀਨ ਲੱਸੀ", "hindi": "नमकीन लस्सी" }
+        },
+        {
+          "name": "Mango Lassi",
+          "price": 4.99,
+          "description": "",
+          "terms": ["mango lassi", "ਮੈਂਗੋ ਲੱਸੀ", "मैंगो लस्सी"],
+          "pronunciation": { "punjabi": "ਮੈਂਗੋ ਲੱਸੀ", "hindi": "मैंगो लस्सी" }
+        },
+        {
+          "name": "Badam Milk",
+          "price": 5.99,
+          "description": "",
+          "terms": ["badam milk", "almond milk"],
+          "pronunciation": { "punjabi": "ਬਾਦਾਮ ਦੁੱਧ", "hindi": "बादाम दूध", "english": "Bah-dum Milk" }
+        }
+      ]
+    },
+    {
+      "id": "sides",
+      "label": "Sides",
+      "items": [
+        {
+          "name": "Butter (2 pcs)",
+          "price": 0.99,
+          "description": "",
+          "terms": ["butter"]
+        },
+        {
+          "name": "Dahi - 8 oz",
+          "price": 2.99,
+          "description": "",
+          "terms": ["dahi", "yogurt", "dahi 8oz", "extra dahi"]
+        },
+        {
+          "name": "Raita - 8 oz",
+          "price": 2.99,
+          "description": "",
+          "terms": ["raita"]
+        },
+        {
+          "name": "Extra Bhatura",
+          "price": 2.50,
+          "description": "",
+          "terms": ["extra bhatura"]
+        },
+        {
+          "name": "Extra Puri",
+          "price": 1.50,
+          "description": "",
+          "terms": ["extra puri"]
+        },
+        {
+          "name": "Choley - 8 oz",
+          "price": 2.99,
+          "description": "",
+          "terms": ["choley", "choley 8oz", "extra choley"]
+        },
+        {
+          "name": "Mix Pickle - 2 oz",
+          "price": 1.49,
+          "description": "",
+          "terms": ["mix pickle", "pickle", "achar"]
+        },
+        {
+          "name": "Tamarind Sauce - 2 oz",
+          "price": 1.00,
+          "description": "",
+          "terms": ["tamarind sauce", "imli sauce", "imli chutney"]
+        },
+        {
+          "name": "Mint Sauce - 2 oz",
+          "price": 1.50,
+          "description": "",
+          "terms": ["mint sauce", "pudina sauce", "pudina chutney"]
+        }
+      ]
+    }
+  ]
+}
