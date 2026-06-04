@@ -72,18 +72,20 @@ class DynamicTTSProcessor(TTSProcessor):
         super().__init__(**kwargs)
         self._state = state
 
-    async def _generate_tts_response(self, message):
-        if not self._active_stream_id:
-            self._language = self._state.tts_language
-            self._voice = self._state.tts_voice
-            # Soniox closes idle TTS connections after ~10s (e.g. while cached
-            # greeting WAV is playing). Reconnect transparently before first use.
-            if self._websocket is not None and self._websocket.closed:
-                await self._reconnect_tts()
-        await super()._generate_tts_response(message)
+    async def start(self, send_message, log):
+        # Store callbacks but do NOT open the Soniox WebSocket yet.
+        # Opening at session start causes an ~10s idle window while the cached
+        # greeting WAV plays, which makes Soniox time out the connection.
+        # We connect lazily on first actual TTS use instead.
+        self.log = log.bind(processor="tts")
+        self._send_message = send_message
 
-    async def _reconnect_tts(self):
-        self.log.info("TTS WebSocket idle-timeout — reconnecting")
+    async def _ensure_tts_alive(self):
+        """Open (or reopen) the Soniox TTS WebSocket when needed."""
+        # Connection is alive when the receive task exists and hasn't exited.
+        if self._receive_task is not None and not self._receive_task.done():
+            return
+        # Cancel any stale tasks from a dropped connection.
         for task in (self._receive_task, self._send_task):
             if task and not task.done():
                 task.cancel()
@@ -91,9 +93,18 @@ class DynamicTTSProcessor(TTSProcessor):
                     await task
                 except asyncio.CancelledError:
                     pass
+        self.log.info("TTS — opening WebSocket connection")
         self._websocket = await websockets.connect(self._api_host)
         self._receive_task = asyncio.create_task(self._receive_task_handler())
         self._send_task = asyncio.create_task(self._send_task_handler())
+        self._alive = True
+
+    async def _generate_tts_response(self, message):
+        if not self._active_stream_id:
+            self._language = self._state.tts_language
+            self._voice = self._state.tts_voice
+            await self._ensure_tts_alive()
+        await super()._generate_tts_response(message)
 
     async def _on_stream_finalized(self):
         if self._state.confirmed_order and self._send_message:
