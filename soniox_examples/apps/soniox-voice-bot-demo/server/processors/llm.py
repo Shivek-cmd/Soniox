@@ -96,11 +96,9 @@ LANGUAGE_SELECTION_PATTERNS = {
     ],
 }
 
-LANGUAGE_SELECTED_RESPONSES = {
-    "english": "Perfect! So what are you in the mood for today?",
-    "hindi": "ਬਿਲਕੁਲ! ਅੱਜ ਕੀ ਲੈਣਾ ਹੈ — ਕੁਝ crispy, ਜਾਂ filling meal?",
-    "punjabi": "ਹਾਂਜੀ! ਅੱਜ ਕੀ ਲੈਣਾ ਹੈ — ਕੁਝ crispy ਚਾਹੀਦਾ ਜਾਂ filling?",
-}
+# Use the same opening greetings as the browser frontend — phone and web
+# should sound identical after language selection.
+LANGUAGE_SELECTED_RESPONSES = OPENING_GREETINGS
 
 
 def _update_tool_calls(
