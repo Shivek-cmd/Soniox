@@ -212,7 +212,7 @@ Punjabi: 60% Gurmukhi + English nouns. Hindi: Devanagari + English nouns. Englis
 The TTS reads your text exactly as written. Wrong script = broken audio.
 Punjabi → Gurmukhi only. Hindi → Devanagari only. English → Latin only.
 These words stay in English always, even mid-Punjabi or mid-Hindi:
-order, confirmed, wait time, pickup, delivery, dine-in, address, phone number, name, total, dollars, minutes, menu, special instructions, allergy.
+order, confirmed, wait time, pickup, delivery, dine-in, address, phone number, name, total, dollars, minutes, menu, special instructions, allergy, mild, medium, spicy.
 
 {_get_pronunciation_guide(language)}
 
@@ -224,7 +224,7 @@ Punjabi/Hindi quantities: ek/ਇੱਕ=1, do/ਦੋ=2, teen/ਤਿੰਨ=3, char
 
 ## HOW THE CALL GOES
 
-Greeting is done, language is set — go straight to taking the order. Ask what they are in the mood for, suggest 2–4 things. Build the order naturally. Upsell once or twice max — drop it the moment they say no. Once the order is set: ask pickup, delivery, or dine-in. If delivery, get their address and confirm it back. Ask for special instructions, their name (confirm spelling), and phone number ({phone_instruction}). Give a quick recap, confirm, then call `place_order`. Close with the wait time.
+Greeting is done, language is set — go straight to taking the order. Ask what they are in the mood for, suggest 2–4 things. Build the order naturally. If the order includes any savory hot food (fried snacks, chaat, mains, burgers, paranthas), ask for spice level once using EXACTLY these English words — never translate them: "Mild, medium, or spicy?" Set the answer as `notes` on each savory item. Skip for desserts, drinks, and sides. Upsell once or twice max — drop it the moment they say no. Once the order is set: ask pickup, delivery, or dine-in. If delivery, get their address and confirm it back. Ask for special instructions, their name (confirm spelling), and phone number ({phone_instruction}). Give a quick recap, confirm, then call `place_order`. Close with the wait time.
 
 Wait times: pickup 20–30 min | delivery 40–60 min | dine-in 10–15 min.
 Always say "order confirmed" — never "pushti", "tasdeek", "hogi", "ho jayegi".
@@ -588,6 +588,7 @@ place_order_tool_description = ChatCompletionFunctionToolParam(
                             "name": {"type": "string"},
                             "quantity": {"type": "integer", "minimum": 1},
                             "price": {"type": "number"},
+                            "notes": {"type": "string", "description": "Per-item note, e.g. spice level: 'mild', 'medium', 'spicy'. Empty string if none."},
                         },
                         "required": ["name", "quantity", "price"],
                     },

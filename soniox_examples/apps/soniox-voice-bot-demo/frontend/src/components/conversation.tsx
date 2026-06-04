@@ -226,7 +226,7 @@ function OrderColumn({
       customer_name: details.name ?? "—",
       phone_number:  details.phone ?? "—",
       order_type:    details.orderType ?? "pickup",
-      items:         detected.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
+      items:         detected.map(i => ({ name: i.name, quantity: i.quantity, price: i.price, notes: "" })),
       total_amount:  detected.reduce((s, i) => s + i.price * i.quantity, 0),
       wait_time:     "20–30 minutes",
       special_instructions: details.instructions ?? "",
@@ -494,6 +494,11 @@ function ReceiptCard({ order }: { order: OrderConfirmed }) {
                 <span style={{ ...R.bold, ...R.mono, flexShrink: 0 }}>${(item.price * item.quantity).toFixed(2)}</span>
               </div>
               <span style={{ ...R.label }}>{item.quantity} × ${item.price.toFixed(2)}</span>
+              {item.notes && (
+                <span style={{ fontSize: 10, color: "#b45309", fontStyle: "italic", marginTop: 1, display: "block" }}>
+                  Notes: {item.notes}
+                </span>
+              )}
             </div>
           ))}
         </div>

@@ -38,6 +38,7 @@ export const orderItemSchema = z.object({
   name: z.string(),
   quantity: z.number(),
   price: z.number(),
+  notes: z.string().optional().default(""),
 });
 
 export type OrderItem = z.infer<typeof orderItemSchema>;
