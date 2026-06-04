@@ -10,7 +10,10 @@ from rapidfuzz import fuzz, process
 
 # ── Load menu.json (single source of truth) ───────────────────────────────────
 
-_MENU_PATH = Path(__file__).parent.parent / "menu.json"
+# Docker: menu.json is copied into /app/ alongside tools.py
+# Local dev: menu.json lives one level up at soniox-voice-bot-demo/
+_dir = Path(__file__).parent
+_MENU_PATH = _dir / "menu.json" if (_dir / "menu.json").exists() else _dir.parent / "menu.json"
 _DATA = json.loads(_MENU_PATH.read_text(encoding="utf-8"))
 
 # ── Business constants ────────────────────────────────────────────────────────

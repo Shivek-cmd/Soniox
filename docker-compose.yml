@@ -1,7 +1,8 @@
 services:
   voice-server:
     build:
-      context: ./soniox_examples/apps/soniox-voice-bot-demo/server
+      context: ./soniox_examples/apps/soniox-voice-bot-demo
+      dockerfile: server/Dockerfile
     environment:
       - SONIOX_API_KEY=${SONIOX_API_KEY}
       - SONIOX_STT_MODEL=${SONIOX_STT_MODEL:-stt-rt-v4}
@@ -33,7 +34,8 @@ services:
 
   frontend:
     build:
-      context: ./soniox_examples/apps/soniox-voice-bot-demo/frontend
+      context: ./soniox_examples/apps/soniox-voice-bot-demo
+      dockerfile: frontend/Dockerfile
       args:
         VITE_SONIOX_VOICE_BOT_WS_URL: wss://voice.bizbull.ai/ws
     depends_on:

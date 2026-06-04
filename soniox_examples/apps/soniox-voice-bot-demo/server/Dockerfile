@@ -4,10 +4,13 @@ COPY --from=ghcr.io/astral-sh/uv:0.8.14 /uv /uvx /bin/
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
+# Install deps first for layer caching
+COPY server/pyproject.toml server/uv.lock ./
 RUN uv sync
 
-COPY . .
+# Copy server source + menu.json (context is now soniox-voice-bot-demo/)
+COPY server/ .
+COPY menu.json .
 
 # Pre-download Silero VAD model to avoid runtime delay
 RUN uv run python -c "from processors.vad import VADProcessor; VADProcessor.warmup()"
