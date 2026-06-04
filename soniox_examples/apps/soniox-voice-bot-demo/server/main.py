@@ -220,14 +220,23 @@ async def handle(websocket: ServerConnection):
         LLMProcessor(
             api_key=OPENAI_API_KEY,
             model=OPENAI_MODEL,
-            system_message=get_system_message(LANGUAGES_MAP[params.language], caller_phone=params.caller_phone),
+            # Phone calls (skip_opening_greeting=True): WAV greeting already asked
+            # "English, Hindi, or Punjabi?" — use "auto" system message so the LLM
+            # isn't locked to one language before the customer has chosen.
+            # language_preselected=False activates LLMProcessor's built-in language
+            # detection: it catches the first "Punjabi"/"Hindi"/"English" utterance,
+            # updates TTS, sends a canned warm response, then hands off to the LLM.
+            system_message=get_system_message(
+                "auto" if params.skip_opening_greeting else LANGUAGES_MAP[params.language],
+                caller_phone=params.caller_phone,
+            ),
             tools=get_tools(state),
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
             on_language_selected=select_language_without_llm,
             send_opening_greeting=not params.skip_opening_greeting,
             opening_greeting=OPENING_GREETINGS.get(initial_language, OPENING_GREETINGS["english"]),
-            language_preselected=True,
+            language_preselected=not params.skip_opening_greeting,
         ),
         DynamicTTSProcessor(
             state=state,

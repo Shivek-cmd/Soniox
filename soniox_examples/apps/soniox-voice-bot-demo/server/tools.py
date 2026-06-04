@@ -191,6 +191,16 @@ def get_system_message(language: str, caller_phone: str = "") -> str:
             "Write ALL Hindi responses in Devanagari script with English nouns (order, confirmed, wait time, pickup, etc.) kept in Latin. "
             "Go straight to helping them order."
         )
+    elif language_lower == "auto":
+        language_context = (
+            "The opening greeting just asked the customer to choose English, Hindi, or Punjabi. "
+            "Their very first message will be their language choice — it has already been handled, so go straight to helping them order. "
+            "Match whatever language they are using: "
+            "Punjabi → Gurmukhi script with English nouns. "
+            "Hindi → Devanagari script with English nouns. "
+            "English → casual warm English. "
+            "If they switch language mid-call, call `select_language` immediately."
+        )
     else:
         language_context = (
             "The customer has selected ENGLISH. The opening greeting has already been said — do NOT greet again or ask which language they prefer. "
