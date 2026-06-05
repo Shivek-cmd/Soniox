@@ -256,17 +256,7 @@ In `place_order` use ORDER count: customer wants 4 samosas → {{"name": "Aloo S
 
 ## PRICES
 
-Samosa: Aloo Samosa (2 pcs) $3.00 | Noodle Samosa (2 pcs) $4.50
-Classics: Chole Bhatura $7.99 | Choley Puri $7.99 | Aloo Puri $7.99
-Chaat: Chaat Papdi $5.99 | Dahi Bhalla $5.99 | Samosa Choley $6.50 | Tawa Tikki Chaat $6.00 | Tawa Tikki Choley $7.50
-Pakora: Mix Veg Pakora $8.50 | Paneer Pakora $11.50 | Gobi Pakora $10.50 | Hara Bara Kabab $10.50 | Aloo Cutlet $10.50 | Mushroom Delux $9.00 | Dahi Kabab $9.00 | Parkash Platter $15.99 | Aloo Finger $8.50 | Spring Roll $8.00 | Mirchi Pakora $10.50 | Baingan Pakora $8.50
-Bread Pakora: Aloo Bread Pakora (2 pcs) $3.00 | Bread Roll (2 pcs) $3.00 | Paneer Aloo Bread Pakora (2 pcs) $5.00
-Burgers: Aloo Tikki Burger $6.50 | Noodle Burger $7.50 | Paneer Tikki Burger $8.50
-Sandwiches: Grilled Cheese $5.50 | Super Veggie $6.99 | Sweet Corn $6.99 | Paneer Mayo $7.99 | Coleslaw (Kids) $5.00
-Parantha: Aloo $4.00 | Gobi $4.50 | Muli $4.50 | Paneer $4.99 | Mix $4.99
-Desserts: Rasmalai (2 pcs) $4.00 | Kesar Rasmalai (6 pcs) $5.99 | Garam Gulab Jamun (2 pcs) $3.00 | Rasgulla (2 pcs) $3.00 | Moong Dal Halwa 8oz $5.50 | Gajrela 8oz $4.50
-Drinks: Mango Lassi $4.99 | Sweet/Salty Lassi $4.49 | Mango Shake $5.50 | Mango Faluda $8.50 | Masala Chai $1.99 | Elachi/Gur Chai $2.99 | Dudh Patti $2.99 | Coffee $2.99 | Badam Milk $5.99
-Sides: Butter (2 pcs) $0.99 | Dahi 8oz $2.99 | Raita 8oz $2.99 | Extra Bhatura $2.50 | Extra Puri $1.50 | Mix Pickle $1.49 | Tamarind Sauce $1.00 | Mint Sauce $1.50
+{_get_prices_section()}
 
 
 ## TOOLS
@@ -282,6 +272,37 @@ Pure vegetarian restaurant — no meat, chicken, beef. Off-menu requests: apolog
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _get_prices_section() -> str:
+    """Build the ## PRICES block from Clover live cache, or fall back to static."""
+    _client = _get_clover_client()
+    if _client is not None and _client.available and _client.menu is not None:
+        all_items = _client.menu.all_items()
+        by_cat: dict[str, list] = {}
+        for item in all_items:
+            cat = item.category_name or "Other"
+            by_cat.setdefault(cat, []).append(item)
+        lines = [
+            f"{cat}: " + " | ".join(f"{i.name} ${i.price_dollars:.2f}" for i in items)
+            for cat, items in by_cat.items()
+        ]
+        return "\n".join(lines)
+
+    # Static fallback — used when Clover is unavailable at session start
+    return (
+        "Samosa: Aloo Samosa (2 pcs) $3.00 | Noodle Samosa (2 pcs) $4.50\n"
+        "Classics: Chole Bhatura $7.99 | Choley Puri $7.99 | Aloo Puri $7.99\n"
+        "Chaat: Chaat Papdi $5.99 | Dahi Bhalla $5.99 | Samosa Choley $6.50 | Tawa Tikki Chaat $6.00 | Tawa Tikki Choley $7.50\n"
+        "Pakora: Mix Veg Pakora $8.50 | Paneer Pakora $11.50 | Gobi Pakora $10.50 | Hara Bara Kabab $10.50 | Aloo Cutlet $10.50 | Mushroom Delux $9.00 | Dahi Kabab $9.00 | Parkash Platter $15.99 | Aloo Finger $8.50 | Spring Roll $8.00 | Mirchi Pakora $10.50 | Baingan Pakora $8.50\n"
+        "Bread Pakora: Aloo Bread Pakora (2 pcs) $3.00 | Bread Roll (2 pcs) $3.00 | Paneer Aloo Bread Pakora (2 pcs) $5.00\n"
+        "Burgers: Aloo Tikki Burger $6.50 | Noodle Burger $7.50 | Paneer Tikki Burger $8.50\n"
+        "Sandwiches: Grilled Cheese $5.50 | Super Veggie $6.99 | Sweet Corn $6.99 | Paneer Mayo $7.99 | Coleslaw (Kids) $5.00\n"
+        "Parantha: Aloo $4.00 | Gobi $4.50 | Muli $4.50 | Paneer $4.99 | Mix $4.99\n"
+        "Desserts: Rasmalai (2 pcs) $4.00 | Kesar Rasmalai (6 pcs) $5.99 | Garam Gulab Jamun (2 pcs) $3.00 | Rasgulla (2 pcs) $3.00 | Moong Dal Halwa 8oz $5.50 | Gajrela 8oz $4.50\n"
+        "Drinks: Mango Lassi $4.99 | Sweet/Salty Lassi $4.49 | Mango Shake $5.50 | Mango Faluda $8.50 | Masala Chai $1.99 | Elachi/Gur Chai $2.99 | Dudh Patti $2.99 | Coffee $2.99 | Badam Milk $5.99\n"
+        "Sides: Butter (2 pcs) $0.99 | Dahi 8oz $2.99 | Raita 8oz $2.99 | Extra Bhatura $2.50 | Extra Puri $1.50 | Mix Pickle $1.49 | Tamarind Sauce $1.00 | Mint Sauce $1.50"
+    )
+
 
 def normalize_menu_category(value: str) -> str:
     value_lower = value.strip().lower()
@@ -491,27 +512,52 @@ get_menu_tool_description = ChatCompletionFunctionToolParam(
 
 async def get_menu(category: str) -> dict:
     print(f"Running Tool: get_menu(category='{category}')")
-    category = normalize_menu_category(category)
+    category_norm = normalize_menu_category(category)
 
-    if category == "all":
-        summary = {
-            cat: [item["name"] for item in items]
-            for cat, items in MENU.items()
-        }
+    # ── Clover live cache (source of truth when available) ────────────────────
+    _client = _get_clover_client()
+    if _client is not None and _client.available and _client.menu is not None:
+        if category_norm == "all":
+            all_items = _client.menu.all_items()
+            by_cat: dict[str, list] = {}
+            for item in all_items:
+                cat = item.category_name or "Other"
+                by_cat.setdefault(cat, []).append({"name": item.name, "price": item.price_dollars})
+            return {"categories": by_cat, "info": BUSINESS_INFO}
+
+        if category_norm == "all_snacks":
+            snack_queries = ["samosa", "chaat", "pakora", "bread pakora", "burger sandwich"]
+            seen: set[str] = set()
+            items: list[dict] = []
+            for q in snack_queries:
+                for ci in _client.menu.get_category(q):
+                    if ci.id not in seen:
+                        seen.add(ci.id)
+                        items.append({"name": ci.name, "price": ci.price_dollars})
+            return {"category": "all_snacks", "items": items}
+
+        clover_items = _client.menu.get_category(category_norm.replace("_", " "))
+        if clover_items:
+            return {
+                "category": category_norm,
+                "items": [{"name": i.name, "price": i.price_dollars} for i in clover_items],
+            }
+        return {"error": f"Category '{category}' not found"}
+
+    # ── Fallback: static menu.json ────────────────────────────────────────────
+    if category_norm == "all":
+        summary = {cat: [item["name"] for item in items] for cat, items in MENU.items()}
         return {"categories": summary, "info": BUSINESS_INFO}
 
-    if category == "all_snacks":
+    if category_norm == "all_snacks":
         snacks = (
-            MENU["samosa"]
-            + MENU["chaat"]
-            + MENU["pakora"]
-            + MENU["bread_pakora"]
-            + MENU["burger_sandwich"]
+            MENU["samosa"] + MENU["chaat"] + MENU["pakora"]
+            + MENU["bread_pakora"] + MENU["burger_sandwich"]
         )
-        return {"category": category, "items": snacks}
+        return {"category": category_norm, "items": snacks}
 
-    if category in MENU:
-        return {"category": category, "items": MENU[category]}
+    if category_norm in MENU:
+        return {"category": category_norm, "items": MENU[category_norm]}
 
     return {"error": "Category not found"}
 

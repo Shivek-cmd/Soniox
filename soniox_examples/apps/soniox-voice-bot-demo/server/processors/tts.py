@@ -63,6 +63,7 @@ class TTSProcessor(MessageProcessor):
         self._send_queue = asyncio.Queue(maxsize=100)
 
         self._active_stream_id: str | None = None
+        self._dead_stream_ids: set[str] = set()  # streams that errored on Soniox side
         self._tts_lock = asyncio.Lock()
         self._alive = False
 
@@ -182,7 +183,7 @@ class TTSProcessor(MessageProcessor):
             try:
                 self._send_queue.put_nowait(text_request)
             except asyncio.QueueFull:
-                self.log.warning("TTS send queue full, dropping text")
+                self.log.debug("TTS send queue full, dropping text")
 
         except asyncio.CancelledError:
             self.log.debug("TTS generation task was cancelled")
@@ -196,6 +197,9 @@ class TTSProcessor(MessageProcessor):
             message = await self._send_queue.get()
             if not self._websocket:
                 break
+            # Discard queued chunks for streams that have already errored.
+            if message.get("stream_id") in self._dead_stream_ids:
+                continue
             try:
                 await self._websocket.send(json.dumps(message))
             except websockets.exceptions.ConnectionClosed:
@@ -244,6 +248,16 @@ class TTSProcessor(MessageProcessor):
                     self.log.error(
                         f"Error from Soniox API: {error_code} {error_message}"
                     )
+                    # Mark this stream dead so _send_task discards any queued
+                    # chunks for it, and clear _active_stream_id so the next
+                    # TTS response opens a fresh stream instead of sending
+                    # to a dead one (avoids the 400-flood after a 408).
+                    if stream_id == self._active_stream_id:
+                        self._active_stream_id = None
+                    self._dead_stream_ids.add(stream_id)
+                    # Trim the dead-stream set so it doesn't grow unbounded
+                    if len(self._dead_stream_ids) > 50:
+                        self._dead_stream_ids.clear()
 
         except websockets.exceptions.ConnectionClosed:
             # Expected when closing the connection

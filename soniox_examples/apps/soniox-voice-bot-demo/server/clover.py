@@ -497,6 +497,11 @@ class CloverClient:
 
         await self._maybe_refresh_token()
 
+        # Strip /v3/merchants/{id} prefix so log lines are short and scannable.
+        _lp = path.replace(f"/v3/merchants/{self._merchant_id}", "") or path
+        log.info("clover.api.request", method=method, path=_lp, attempt=_attempt)
+        _t0 = time.perf_counter()
+
         try:
             response = await self._http.request(
                 method, path, json=json_body, params=params
@@ -527,6 +532,8 @@ class CloverClient:
             ) from exc
 
         status = response.status_code
+        _ms = round((time.perf_counter() - _t0) * 1000)
+        log.info("clover.api.response", method=method, path=_lp, status=status, ms=_ms)
 
         if status == 200:
             return response.json()
@@ -952,7 +959,12 @@ class CloverClient:
         if spice_parts:
             note_parts.append("Spice — " + " | ".join(spice_parts))
 
-        order_body: dict = {"orderType": {"id": order_type_id}}
+        order_body: dict = {
+            "orderType": {"id": order_type_id},
+            # manualTransaction=true marks this as a remote/phone order so it
+            # appears in the Clover dashboard Orders list (not just line items).
+            "manualTransaction": True,
+        }
         if customer_name:
             order_body["title"] = customer_name[:64]
         if note_parts:

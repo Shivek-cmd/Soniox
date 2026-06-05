@@ -136,7 +136,7 @@ class Session:
                 await self.send_message_queue.put(message.json())
 
             if isinstance(message, MetricsMessage):
-                self.log.info(message.json())
+                self.log.debug(message.json())
 
             if isinstance(message, UserSpeechStartMessage):
                 await self.send_message_queue.put(message.json())

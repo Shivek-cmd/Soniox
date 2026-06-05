@@ -14,6 +14,13 @@ services:
       - WEBSOCKET_HOST=0.0.0.0
       - WEBSOCKET_PORT=8765
       - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-}
+      # Clover POS
+      - CLOVER_BASE_URL=${CLOVER_BASE_URL}
+      - CLOVER_MERCHANT_ID=${CLOVER_MERCHANT_ID}
+      - CLOVER_ACCESS_TOKEN=${CLOVER_ACCESS_TOKEN}
+      - CLOVER_REFRESH_TOKEN=${CLOVER_REFRESH_TOKEN:-}
+      - CLOVER_WEBHOOK_SECRET=${CLOVER_WEBHOOK_SECRET}
+      - CLOVER_MENU_POLL_INTERVAL=${CLOVER_MENU_POLL_INTERVAL:-300}
     restart: unless-stopped
 
   twilio-bridge:
@@ -21,13 +28,18 @@ services:
       context: ./soniox_examples/apps/soniox-voice-bot-demo/twilio
     environment:
       - SONIOX_VOICE_BOT_WS_URL=ws://voice-server:8765
-      - VOICE_BOT_LANGUAGE=pa
-      - VOICE_BOT_VOICE=Maya
-      - OPENING_GREETING_AUDIO_PATH=${OPENING_GREETING_AUDIO_PATH:-}
+      - VOICE_SERVER_INTERNAL_URL=http://voice-server:8765
+      - VOICE_BOT_LANGUAGE=${VOICE_BOT_LANGUAGE:-pa}
+      - VOICE_BOT_VOICE=${VOICE_BOT_VOICE:-Maya}
+      - OPENING_GREETING_AUDIO_PATH=assets/opening_greeting.wav
       - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_NUMBER=${TWILIO_NUMBER}
+      - YOUR_NUMBER=${YOUR_NUMBER}
       - OWNER_PHONE_NUMBER=${OWNER_PHONE_NUMBER}
       - NGROK_URL=${NGROK_URL}
+      # Clover webhook validation (must match CLOVER_WEBHOOK_SECRET above)
+      - CLOVER_WEBHOOK_SECRET=${CLOVER_WEBHOOK_SECRET}
     depends_on:
       - voice-server
     restart: unless-stopped

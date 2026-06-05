@@ -387,7 +387,7 @@ class LLMProcessor(MessageProcessor):
             return
 
         last_msg = self._messages[-1] if self._messages else {}
-        self.log.debug("User → LLM", text=(last_msg.get("content") or "")[:200])
+        self.log.info("User → LLM", text=(last_msg.get("content") or "")[:200])
 
         self._llm_start_time = time.perf_counter()
         self._first_token_sent = False
@@ -436,7 +436,7 @@ class LLMProcessor(MessageProcessor):
 
                 # Call tools
                 if tool_calls:
-                    self.log.debug("Calling tools", tool_calls=tool_calls)
+                    self.log.info("Calling tools", tool_calls=tool_calls)
                     self._messages.append(
                         ChatCompletionAssistantMessageParam(
                             role="assistant",
@@ -446,7 +446,7 @@ class LLMProcessor(MessageProcessor):
 
                 for tool_call in tool_calls:
                     response = await self._call_tool(tool_call)
-                    self.log.debug(
+                    self.log.info(
                         "Got tool call response", tool=tool_call, response=response
                     )
 

@@ -150,7 +150,7 @@ class STTProcessor(MessageProcessor):
             try:
                 self._send_queue.put_nowait(message.audio_data())
             except asyncio.QueueFull:
-                self.log.warning("STT send queue full, dropping audio")
+                self.log.debug("STT send queue full, dropping audio")
 
     async def _send_task_handler(self):
         try:

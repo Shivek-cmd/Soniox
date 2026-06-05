@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import asyncio
+import logging
 import os
+import time
 from http import HTTPStatus
 from typing import List
 from urllib.parse import parse_qs, urlparse
@@ -32,7 +34,19 @@ from tools import (
 )
 
 dotenv.load_dotenv()
+logging.basicConfig(level=logging.INFO)
+structlog.configure(
+    wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+)
+# Silence third-party stdlib loggers — their calls are re-emitted as structlog
+# clover.api.* events where useful; the rest is noise.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("websockets").setLevel(logging.WARNING)
 log = structlog.get_logger()
+
+# Reconnect TTS before Soniox's ~60 s idle keepalive timeout fires.
+_TTS_IDLE_RECONNECT_SECS = 45
 
 WEBSOCKET_HOST = os.getenv("WEBSOCKET_HOST", "localhost")
 WEBSOCKET_PORT = int(os.getenv("WEBSOCKET_PORT", "8765"))
@@ -73,6 +87,7 @@ class DynamicTTSProcessor(TTSProcessor):
     def __init__(self, state: RestaurantState, **kwargs):
         super().__init__(**kwargs)
         self._state = state
+        self._last_stream_end: float = 0.0
 
     async def start(self, send_message, log):
         # Store callbacks but do NOT open the Soniox WebSocket yet.
@@ -83,11 +98,23 @@ class DynamicTTSProcessor(TTSProcessor):
         self._send_message = send_message
 
     async def _ensure_tts_alive(self):
-        """Open (or reopen) the Soniox TTS WebSocket when needed."""
-        # Connection is alive when the receive task exists and hasn't exited.
-        if self._receive_task is not None and not self._receive_task.done():
+        """Open (or reopen) the Soniox TTS WebSocket when needed.
+
+        Two-layer safety net:
+          1. Time-based (pre-emptive): reconnect if the connection has been idle
+             for _TTS_IDLE_RECONNECT_SECS.  Soniox kills connections after ~60 s
+             of silence with a keepalive ping timeout.  We reconnect at 45 s so
+             the new stream always starts on a fresh socket.
+          2. Task-based (reactive): reconnect if the receive task has already
+             exited (unexpected drop, server restart, network blip).
+        """
+        idle_secs = time.monotonic() - self._last_stream_end
+        task_running = (
+            self._receive_task is not None and not self._receive_task.done()
+        )
+        if task_running and idle_secs < _TTS_IDLE_RECONNECT_SECS:
             return
-        # Cancel any stale tasks from a dropped connection.
+        # Cancel any stale tasks before opening a fresh connection.
         for task in (self._receive_task, self._send_task):
             if task and not task.done():
                 task.cancel()
@@ -95,8 +122,31 @@ class DynamicTTSProcessor(TTSProcessor):
                     await task
                 except asyncio.CancelledError:
                     pass
-        self.log.info("TTS — opening WebSocket connection")
-        self._websocket = await websockets.connect(self._api_host)
+        # Fresh connection — old dead-stream IDs are irrelevant on the new socket.
+        self._dead_stream_ids.clear()
+        # Retry the handshake — Soniox can transiently time out on new connections.
+        _last_exc: Exception | None = None
+        for _attempt in range(1, 4):
+            try:
+                self.log.debug(
+                    "TTS — opening WebSocket connection",
+                    idle_secs=round(idle_secs), attempt=_attempt,
+                )
+                self._websocket = await websockets.connect(self._api_host)
+                _last_exc = None
+                break
+            except Exception as exc:
+                _last_exc = exc
+                if _attempt < 3:
+                    _wait = _attempt * 2.0
+                    self.log.warning(
+                        "tts.connect.retry",
+                        attempt=_attempt, wait=_wait, error=str(exc),
+                    )
+                    await asyncio.sleep(_wait)
+        if _last_exc is not None:
+            self.log.error("tts.connect.failed", attempts=3, error=str(_last_exc))
+            raise _last_exc
         self._receive_task = asyncio.create_task(self._receive_task_handler())
         self._send_task = asyncio.create_task(self._send_task_handler())
         self._alive = True
@@ -105,10 +155,17 @@ class DynamicTTSProcessor(TTSProcessor):
         if not self._active_stream_id:
             self._language = self._state.tts_language
             self._voice = self._state.tts_voice
-            await self._ensure_tts_alive()
+            try:
+                await self._ensure_tts_alive()
+            except Exception as exc:
+                self.log.error("tts.connect.fatal_closing_session", error=str(exc))
+                if self._send_message:
+                    await self._send_message(ErrorMessage("TTS connection failed"))
+                return
         await super()._generate_tts_response(message)
 
     async def _on_stream_finalized(self):
+        self._last_stream_end = time.monotonic()
         if self._state.confirmed_order and self._send_message:
             order = self._state.confirmed_order
             self._state.confirmed_order = None

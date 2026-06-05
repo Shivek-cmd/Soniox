@@ -5,8 +5,8 @@
         reverse_proxy voice-server:8765
     }
 
-    # Twilio phone call endpoints → twilio-bridge
-    @twilio path /incoming-call /transfer-twiml /media-stream
+    # Twilio phone call endpoints + Clover webhook → twilio-bridge
+    @twilio path /incoming-call /transfer-twiml /media-stream /clover-webhook
     handle @twilio {
         reverse_proxy twilio-bridge:5050
     }
