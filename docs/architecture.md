@@ -1,152 +1,121 @@
 # Voice Agent Architecture
 
-This project runs a phone-based restaurant voice agent. Twilio handles the phone call, Caddy exposes the public HTTPS endpoint, the Twilio bridge converts Twilio's media stream into raw audio, and the core voice server runs the AI pipeline.
+This project runs a phone-based and browser-based restaurant voice agent for Parkash Sweets.
+Twilio handles phone calls. Caddy exposes the public HTTPS endpoint. The Twilio bridge converts Twilio's media stream into raw audio. The core voice server runs the AI pipeline and owns the Clover POS connection.
 
-`soniox_examples` is now tracked directly inside the main `Soniox` repo. It is no longer a Git submodule.
+`soniox_examples` is tracked directly inside the main `Soniox` repo (not a submodule).
 
 ---
 
 ## Production Deployment
 
-The server runs three Docker services from `docker-compose.yml`:
+Four Docker services from `docker-compose.yml` at the repo root:
 
 ```text
 Internet
   |
   v
-voice.bizbull.ai
+voice.bizbull.ai  (Caddy — ports 80/443)
   |
-  v
-caddy
-  |
-  v
-twilio-bridge:5050
-  |
-  v
-voice-server:8765
+  |-- /ws                → voice-server:8765    (browser WebSocket)
+  |-- /incoming-call     → twilio-bridge:5050   (Twilio phone call start)
+  |-- /transfer-twiml    → twilio-bridge:5050   (call transfer)
+  |-- /media-stream      → twilio-bridge:5050   (Twilio audio stream)
+  |-- /clover-webhook    → twilio-bridge:5050   (Clover inventory events)
+  |-- /*                 → frontend:80          (React UI)
 ```
 
 ### `caddy`
 
-Caddy is the public-facing reverse proxy.
+File: `Caddyfile`
 
-File:
+Path-based routing. One public entrypoint covers all four services.
 
-```text
-Caddyfile
-```
+- `/ws` — proxies browser WebSocket connections to the voice server
+- `/incoming-call`, `/transfer-twiml`, `/media-stream`, `/clover-webhook` — all phone/POS webhook traffic to the Twilio bridge
+- Everything else — React frontend
 
-Current config:
-
-```text
-voice.bizbull.ai {
-    reverse_proxy twilio-bridge:5050
-}
-```
-
-Responsibilities:
-
-- Listens on public ports `80` and `443`
-- Provides HTTPS for `voice.bizbull.ai`
-- Forwards all traffic to the internal `twilio-bridge` container
-- Stores TLS data in the `caddy_data` Docker volume
+Caddy handles HTTPS and auto-renews Let's Encrypt TLS certs. Data stored in `caddy_data` Docker volume.
 
 ### `twilio-bridge`
 
-The Twilio bridge is a FastAPI app.
+File: `soniox_examples/apps/soniox-voice-bot-demo/twilio/main.py`
 
-File:
-
-```text
-soniox_examples/apps/soniox-voice-bot-demo/twilio/main.py
-```
-
-Docker service:
-
-```yaml
-twilio-bridge:
-  environment:
-    - SONIOX_VOICE_BOT_WS_URL=ws://voice-server:8765
-    - VOICE_BOT_LANGUAGE=pa
-    - VOICE_BOT_VOICE=Maya
-```
+FastAPI app on port 5050.
 
 Responsibilities:
+- Receives Twilio webhooks at `/incoming-call`, `/transfer-twiml`, `/media-stream`
+- Opens an internal WebSocket to `voice-server:8765` per call
+- Forwards caller audio to voice server; converts bot audio (PCM 24kHz → mulaw 8kHz) back to Twilio
+- Receives Clover inventory webhooks at `/clover-webhook`, validates HMAC, pings `voice-server:8765/internal/clover-reload`
+- Handles call transfer and barge-in (clears Twilio audio queue on interruption)
 
-- Receives Twilio webhook requests at `/incoming-call`
-- Returns TwiML that tells Twilio to open a WebSocket stream
-- Receives Twilio audio at `/media-stream`
-- Opens an internal WebSocket connection to `voice-server`
-- Forwards caller audio to the voice server
-- Converts bot audio back into Twilio's required format
-- Sends the bot voice back to the phone call
+Key env vars:
+```env
+SONIOX_VOICE_BOT_WS_URL=ws://voice-server:8765
+VOICE_SERVER_INTERNAL_URL=http://voice-server:8765
+CLOVER_WEBHOOK_SECRET=...
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+NGROK_URL=https://voice.bizbull.ai
+```
 
 ### `voice-server`
 
-The voice server is the core AI server.
+File: `soniox_examples/apps/soniox-voice-bot-demo/server/main.py`
 
-File:
-
-```text
-soniox_examples/apps/soniox-voice-bot-demo/server/main.py
-```
-
-It is not FastAPI. It is a raw WebSocket server using Python `websockets`.
-
-Docker service:
-
-```yaml
-voice-server:
-  environment:
-    - SONIOX_API_KEY=${SONIOX_API_KEY}
-    - OPENAI_API_KEY=${OPENAI_API_KEY}
-    - OPENAI_MODEL=gpt-4o-mini
-    - WEBSOCKET_HOST=0.0.0.0
-    - WEBSOCKET_PORT=8765
-```
+Raw Python WebSocket server on port 8765. Not FastAPI.
 
 Responsibilities:
+- Accepts WebSocket connections from the Twilio bridge (phone) and browser (frontend)
+- Initialises Clover POS client at startup — blocks until menu is loaded
+- Runs the AI pipeline per session: VAD → STT → LLM → TTS
+- Exposes `GET /internal/clover-reload` for the Twilio bridge webhook relay
 
-- Accepts WebSocket connections from the Twilio bridge
-- Receives live caller audio
-- Runs the voice pipeline: VAD, STT, LLM, TTS
-- Streams generated bot audio back to the bridge
+Key env vars:
+```env
+SONIOX_API_KEY=...
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-4o-mini
+CLOVER_BASE_URL=https://api.clover.com
+CLOVER_MERCHANT_ID=...
+CLOVER_ACCESS_TOKEN=...
+CLOVER_WEBHOOK_SECRET=...
+```
+
+### `frontend`
+
+File: `soniox_examples/apps/soniox-voice-bot-demo/frontend/`
+
+React + Vite app, served via nginx on port 80. Used for browser testing without a phone.
+
+`VITE_SONIOX_VOICE_BOT_WS_URL` is a **build-time arg** baked into the JS bundle — must be set to `wss://voice.bizbull.ai/ws` before building.
 
 ---
 
 ## Phone Call Flow
 
 ```text
-Customer phone call
-  |
-  v
-Twilio phone number
+Customer dials +15878175156
   |
   | POST https://voice.bizbull.ai/incoming-call
   v
-Caddy
+Caddy → twilio-bridge /incoming-call
   |
-  v
-twilio-bridge /incoming-call
-  |
-  | returns TwiML with wss://voice.bizbull.ai/media-stream
+  | returns TwiML: Connect → Stream wss://voice.bizbull.ai/media-stream
   v
 Twilio opens media WebSocket
   |
   v
-twilio-bridge /media-stream
+Caddy → twilio-bridge /media-stream
   |
-  | ws://voice-server:8765?audio_in_format=mulaw&audio_in_sample_rate=8000&...
+  | ws://voice-server:8765?audio_in_format=mulaw&...&skip_opening_greeting=true
   v
-voice-server
+voice-server (new Session)
   |
-  | VAD -> Soniox STT -> OpenAI LLM -> Soniox TTS
+  | VAD → Soniox STT → OpenAI LLM → Soniox TTS
   v
-twilio-bridge
-  |
-  | converts PCM 24kHz audio to mulaw 8kHz
-  v
-Twilio
+twilio-bridge (PCM 24kHz → mulaw 8kHz → Twilio mark/media events)
   |
   v
 Customer hears the agent
@@ -154,11 +123,34 @@ Customer hears the agent
 
 ---
 
+## Clover Webhook Flow
+
+```text
+Restaurant updates an item price in Clover dashboard
+  |
+  | POST https://voice.bizbull.ai/clover-webhook (X-Clover-Auth header)
+  v
+Caddy → twilio-bridge /clover-webhook
+  |
+  | validates HMAC, checks event type (I/IC/IG/IM = inventory events)
+  | GET http://voice-server:8765/internal/clover-reload
+  v
+voice-server process_request handler
+  |
+  | client.schedule_menu_reload()  (debounced 2s)
+  v
+Clover API: GET /v3/merchants/{id}/items
+  |
+  v
+MenuCache.replace_all(raw_items)
+  → all new sessions use updated prices
+```
+
+---
+
 ## Core Voice Pipeline
 
-Every live call becomes one WebSocket session in `voice-server`.
-
-The server creates this processor chain:
+Every call or browser session creates one `Session` in the voice server.
 
 ```python
 processors = [
@@ -167,246 +159,207 @@ processors = [
     LLMProcessor(...),
     DynamicTTSProcessor(...),
 ]
-```
-
-Then it runs:
-
-```python
 session = Session(processors, websocket)
 await session.run()
 ```
 
 ### 1. `VADProcessor`
 
-File:
+File: `server/processors/vad.py`
 
-```text
-server/processors/vad.py
-```
-
-Purpose:
-
-- Detects when the caller starts speaking
-- Detects when the caller stops speaking
-- Helps support interruption while the bot is talking
+Silero VAD. Detects speech start/end. Enables barge-in (caller can interrupt the bot).
 
 ### 2. `STTProcessor`
 
-File:
+File: `server/processors/stt.py`
 
-```text
-server/processors/stt.py
-```
-
-Purpose:
-
-- Streams caller audio to Soniox speech-to-text
-- Uses restaurant vocabulary context from `STT_CONTEXT`
-- Produces transcription messages for the LLM
-
-Current speech context includes Parkash Sweets menu terms such as:
-
-```text
-Aloo Samosa, Chole Bhatura, Chaat Papdi, Paneer Pakora,
-Rasmalai, Mango Lassi, pickup, delivery
-```
-
-Current language hints:
-
-```python
-["pa", "hi", "en"]
-```
-
-That means the bot is tuned for Punjabi, Hindi, and English input.
+Streams audio to Soniox real-time STT. Uses restaurant vocabulary context (`STT_CONTEXT`) and language hints. For phone calls the hints are `["pa", "hi", "en"]` (Punjabi, Hindi, English).
 
 ### 3. `LLMProcessor`
 
-File:
+File: `server/processors/llm.py`
 
-```text
-server/processors/llm.py
-```
-
-Purpose:
-
-- Sends a fixed English opening greeting as soon as the call starts
-- Sends the customer transcript to OpenAI
-- Uses `gpt-4o-mini` by default
-- Applies the restaurant system prompt from `tools.py`
-- Uses restaurant tools from `get_tools(state)`
-- Streams response text toward TTS
-
-The LLM owns the conversation brain after the opening greeting: language selection, menu understanding, order collection, confirmation, and tool calls.
-
-Current opening greeting:
-
-```text
-Hi! This is Sierra calling from Parkaash Sweets. Would you like to continue in English, Hindi, or Punjabi?
-```
+Sends transcriptions to OpenAI and streams response text to TTS. Key behaviours:
+- Phone calls: opens with a cached WAV greeting asking for language, then detects language from first reply and switches TTS accordingly
+- Browser: plays the opening greeting directly in the chosen language
+- Calls tools (`place_order`, `get_menu`, `check_item_availability`, `select_language`, `transfer_call`) when needed
+- Logs `User → LLM`, `Calling tools`, `Got tool call response` at INFO level
 
 ### 4. `DynamicTTSProcessor`
 
-Defined in:
+Defined in: `server/main.py` (extends `TTSProcessor` from `server/processors/tts.py`)
 
-```text
-server/main.py
-```
-
-It extends the normal Soniox `TTSProcessor`.
-
-Purpose:
-
-- Converts the LLM response text into voice audio
-- Reads current language and voice from `RestaurantState`
-- Allows the bot to switch TTS language/voice during the call when tools update state
+- Reads language/voice from `RestaurantState` on each new TTS stream (supports mid-call language switch)
+- **Lazy connection**: does not open the Soniox TTS WebSocket at session start — connects on first TTS use
+- **Time-based reconnect**: if the last TTS stream finished >45 seconds ago, reconnects before starting a new stream (Soniox closes idle connections at ~60s)
+- **Retry on connect**: up to 3 attempts with 2s/4s backoff if the Soniox handshake times out
+- **Dead stream recovery**: if Soniox returns 408/400 for a stream, marks that stream ID dead — `_send_task` discards queued chunks for it, `_active_stream_id` is cleared, and the next TTS chunk starts a fresh stream automatically
+- Fires `OrderConfirmedMessage` and `TransferCallMessage` after the farewell audio finishes
 
 ---
 
-## Restaurant State And Tools
+## Clover POS Integration
 
-Restaurant-specific behavior lives mainly in:
+File: `server/clover.py`
+
+`CloverClient` is a singleton initialised at startup. It is the source of truth for all menu data and order creation.
+
+### Startup sequence
 
 ```text
-soniox_examples/apps/soniox-voice-bot-demo/server/tools.py
+main() calls CloverClient.init()
+  → GET /v3/merchants/{id}/order_types  (maps "Takeout"/"Delivery"/"Dine-In" to Clover IDs)
+  → GET /v3/merchants/{id}/items        (loads full menu into MenuCache)
+  → starts background poll task (every 5 min, delta sync)
 ```
 
-Important pieces:
+If the menu load fails, the server falls back to `menu.json` until Clover is reachable.
 
-- `RestaurantState`
-- `get_system_message(...)`
-- `get_tools(state)`
+### MenuCache
 
-`RestaurantState` stores call-level information such as selected language, TTS language, TTS voice, and order details.
+Three indexes built at startup and on every reload:
+- `by_id` — Clover item ID → `CloverItem`
+- `by_name` — normalized name / spoken alias → Clover item ID (fuzzy matched at ≥80 score)
+- `by_category` — category name → list of `CloverItem` (fuzzy matched at ≥70 score)
 
-`get_system_message(...)` creates the restaurant agent instructions.
+Extras (spoken aliases, pronunciation hints) are loaded from `menu.json` and merged into `CloverItem` objects. Clover has no concept of these fields.
 
-`get_tools(state)` exposes callable tools to the LLM so it can manage restaurant-specific actions instead of only chatting freely.
+### Order creation
+
+```text
+place_order tool called
+  → CloverClient.create_order(order_type, items, customer_name, phone, notes)
+    → POST /v3/merchants/{id}/orders           (creates shell with manualTransaction:true)
+    → POST /v3/merchants/{id}/orders/{id}/line_items  (one POST per unit — Clover has no qty field)
+    → GET  /v3/merchants/{id}/orders/{id}      (fetch final order for total)
+  → returns CloverCreatedOrder with order_id
+```
+
+`manualTransaction: true` marks the order as a remote/phone order so it appears in the Clover dashboard Orders list.
+
+### Clover API logging
+
+Every HTTP call through `_request()` logs:
+```
+clover.api.request   method=POST  path=/orders  attempt=1
+clover.api.response  method=POST  path=/orders  status=200  ms=245
+```
+
+### Token management
+
+For production, set `CLOVER_REFRESH_TOKEN`. The client auto-refreshes the access token 5 minutes before its 1-hour expiry. Sandbox tokens never expire — leave `CLOVER_REFRESH_TOKEN` empty.
+
+---
+
+## Restaurant Tools
+
+File: `server/tools.py`
+
+| Tool | Purpose |
+|---|---|
+| `get_menu(category)` | Returns menu items from Clover cache; falls back to menu.json |
+| `check_item_availability(name)` | Checks Clover cache first; falls back to static data |
+| `place_order(...)` | Creates order in Clover POS; falls back to n8n webhook |
+| `select_language(language)` | Switches TTS language/voice mid-call |
+| `transfer_call(reason)` | Transfers call to owner phone number |
+
+`get_system_message()` dynamically builds the `## PRICES` section from live Clover cache at session start — the LLM always has the current prices.
+
+---
+
+## Logging
+
+All logs use `structlog` at INFO level. Third-party stdlib loggers (`httpx`, `websockets`, `httpcore`) are silenced.
+
+Key log events:
+```
+Warming up VAD model...
+clover.api.request / clover.api.response    — every Clover HTTP call with ms timing
+clover.order_types.ready                    — startup: order type IDs mapped
+menu_cache.replaced                         — menu loaded or reloaded
+clover.ready                                — Clover fully initialised
+Starting WebSocket server
+Starting session                            — new call/browser session
+User → LLM                                 — transcription sent to OpenAI
+Calling tools                               — LLM made a tool call
+Got tool call response                      — tool result returned to LLM
+clover.order.created                        — order confirmed in Clover POS
+Session completed.
+```
 
 ---
 
 ## Audio Formats
 
-Twilio and Soniox use different audio formats, so the bridge handles conversion.
-
 | Stage | Format |
-| --- | --- |
-| Twilio to bridge | mulaw, 8kHz, mono, base64 JSON payload |
-| Bridge to voice-server | mulaw, 8kHz, mono, raw bytes |
+|---|---|
+| Twilio → bridge | mulaw, 8kHz, mono, base64 JSON |
+| Bridge → voice-server | mulaw, 8kHz, mono, raw bytes |
 | Voice-server STT input | configured from WebSocket query params |
 | Soniox TTS output | PCM, 24kHz, mono |
-| Voice-server to bridge | PCM, 24kHz audio bytes |
-| Bridge to Twilio | mulaw, 8kHz, mono, base64 JSON payload |
-
-Conversion happens in `twilio/main.py`:
-
-```python
-pcm_audio_bytes_8k = audioop.ratecv(
-    pcm_audio_bytes, 2, 1, 24000, 8000, None
-)[0]
-ulaw_audio_bytes = audioop.lin2ulaw(pcm_audio_bytes_8k, 2)
-```
+| Voice-server → bridge | PCM, 24kHz audio bytes |
+| Bridge → Twilio | mulaw, 8kHz, mono, base64 JSON |
 
 ---
 
 ## Interruption Handling
 
-The system supports basic barge-in, meaning the caller can interrupt the bot while it is speaking.
-
-How it works:
-
-1. The voice server sends transcription events back to the Twilio bridge.
-2. The bridge tracks whether bot audio is still queued using Twilio `mark` messages.
-3. When caller speech is detected while bot audio is pending, the bridge sends:
-
-```json
-{"event": "clear"}
-```
-
-Twilio then clears queued bot audio so the caller does not have to wait for the previous response to finish.
+1. Voice server sends transcription events back to the Twilio bridge
+2. Bridge tracks queued bot audio using Twilio `mark` messages
+3. When caller speech is detected while bot audio is pending, bridge sends `{"event": "clear"}` to Twilio
 
 ---
 
 ## Environment Variables
 
-Main runtime variables are configured in `docker-compose.yml` and `.env`.
+All variables are in root `.env` and substituted by `docker-compose.yml`.
 
 ### Voice server
-
 ```env
 SONIOX_API_KEY=...
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-4o-mini
 SONIOX_STT_MODEL=stt-rt-v4
 SONIOX_TTS_MODEL=tts-rt-v1
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-4o-mini
 LLM_TEMPERATURE=0.85
-LLM_MAX_TOKENS=120
+LLM_MAX_TOKENS=200
+N8N_WEBHOOK_URL=...
 WEBSOCKET_HOST=0.0.0.0
 WEBSOCKET_PORT=8765
+CLOVER_BASE_URL=https://api.clover.com
+CLOVER_MERCHANT_ID=...
+CLOVER_ACCESS_TOKEN=...
+CLOVER_REFRESH_TOKEN=
+CLOVER_WEBHOOK_SECRET=...
+CLOVER_MENU_POLL_INTERVAL=300
 ```
 
 ### Twilio bridge
-
 ```env
 SONIOX_VOICE_BOT_WS_URL=ws://voice-server:8765
+VOICE_SERVER_INTERNAL_URL=http://voice-server:8765
 VOICE_BOT_LANGUAGE=pa
 VOICE_BOT_VOICE=Maya
-```
-
-### Test call script
-
-The local test call script is:
-
-```text
-soniox_examples/apps/soniox-voice-bot-demo/twilio/make_call.py
-```
-
-It reads Twilio values from environment variables:
-
-```env
 TWILIO_ACCOUNT_SID=...
 TWILIO_AUTH_TOKEN=...
-TWILIO_NUMBER=...
-YOUR_NUMBER=...
-NGROK_URL=...
+TWILIO_NUMBER=+15878175156
+YOUR_NUMBER=+919413752688
+OWNER_PHONE_NUMBER=...
+NGROK_URL=https://voice.bizbull.ai
+OPENING_GREETING_AUDIO_PATH=assets/opening_greeting.wav
+CLOVER_WEBHOOK_SECRET=...
 ```
 
-Do not hard-code Twilio credentials in Python files.
-
----
-
-## Local Browser Testing
-
-The original Soniox demo also includes a browser frontend:
-
-```text
-soniox_examples/apps/soniox-voice-bot-demo/frontend
+### Frontend (build arg, baked into JS bundle)
+```env
+VITE_SONIOX_VOICE_BOT_WS_URL=wss://voice.bizbull.ai/ws
 ```
-
-For browser testing, the flow is different:
-
-```text
-Browser microphone
-  |
-  v
-voice-server WebSocket
-  |
-  v
-VAD -> STT -> LLM -> TTS
-  |
-  v
-Browser audio playback
-```
-
-The production phone deployment does not expose this frontend through Caddy. Production traffic goes through Twilio and the `twilio-bridge`.
 
 ---
 
 ## Deployment Workflow
 
-The project is now one repo.
-
-Local Windows workflow:
-
+Push from Windows:
 ```powershell
 cd "D:\Chrishan Solution\Soniox"
 git add .
@@ -414,18 +367,15 @@ git commit -m "your message"
 git push
 ```
 
-Server workflow:
-
+Deploy on server:
 ```bash
 cd ~/Soniox
 git pull
 docker compose up -d --build
 ```
 
-For a quicker restart after Python-only changes:
-
+Python-only changes (faster):
 ```bash
-cd ~/Soniox
 git pull
 docker compose up -d --force-recreate voice-server twilio-bridge
 ```
@@ -434,14 +384,14 @@ docker compose up -d --force-recreate voice-server twilio-bridge
 
 ## Summary
 
-Short version:
-
 ```text
-Caddy = public HTTPS entrypoint
-Twilio bridge = FastAPI app that talks to Twilio
-Voice server = WebSocket AI engine
-Soniox STT = speech to text
-OpenAI = restaurant conversation brain
-Soniox TTS = text to speech
-Docker Compose = runs all services together
+Caddy           = public HTTPS entrypoint, path-based routing
+twilio-bridge   = FastAPI: Twilio phone bridge + Clover webhook relay
+voice-server    = WebSocket AI engine + Clover POS client
+frontend        = React UI for browser testing
+Soniox STT      = speech to text (Punjabi / Hindi / English)
+OpenAI LLM      = conversation brain
+Soniox TTS      = text to speech
+Clover POS      = live menu cache + order creation
+Docker Compose  = runs all four services
 ```

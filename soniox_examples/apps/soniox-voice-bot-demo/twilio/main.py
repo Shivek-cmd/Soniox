@@ -108,15 +108,22 @@ def load_opening_greeting_ulaw() -> bytes | None:
 async def handle_clover_webhook(request: Request):
     """Receive Clover inventory webhooks and forward a reload signal to the voice server."""
     body = await request.body()
-    auth_header = request.headers.get("X-Clover-Auth", "")
-
-    if CLOVER_WEBHOOK_SECRET and not hmac.compare_digest(auth_header, CLOVER_WEBHOOK_SECRET):
-        return HTMLResponse(status_code=401, content="Unauthorized")
 
     try:
         payload = json.loads(body)
     except Exception:
         return HTMLResponse(status_code=400, content="Invalid JSON")
+
+    # Clover sends a verification POST with no auth header — just a verificationCode.
+    # Return 200 immediately so the dashboard can complete verification.
+    # Copy the code from logs, paste it into the Clover dashboard to finish setup.
+    if "verificationCode" in payload:
+        print(f"clover.webhook.verification_code={payload['verificationCode']}")
+        return HTMLResponse(status_code=200, content="OK")
+
+    auth_header = request.headers.get("X-Clover-Auth", "")
+    if CLOVER_WEBHOOK_SECRET and not hmac.compare_digest(auth_header, CLOVER_WEBHOOK_SECRET):
+        return HTMLResponse(status_code=401, content="Unauthorized")
 
     # Clover format: {"merchants": {"MID": {"data": [{"type": "I", ...}]}}}
     should_reload = any(
