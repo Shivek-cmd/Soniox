@@ -32,7 +32,8 @@
       "WebFetch(domain:community.make.com)",
       "Bash(pip install *)",
       "Bash(dir \"d:\\\\Chrishan Solution\\\\Soniox\\\\soniox_examples\\\\apps\\\\soniox-voice-bot-demo\\\\frontend\\\\src\" /s /b)",
-      "Bash(findstr -v node_modules)"
+      "Bash(findstr -v node_modules)",
+      "WebFetch(domain:docs.clover.com)"
     ],
     "additionalDirectories": [
       "C:\\Users\\shive\\.claude"

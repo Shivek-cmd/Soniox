@@ -3,8 +3,10 @@
 
 import asyncio
 import base64
+import hmac
 import json
 import os
+import urllib.request
 from urllib.parse import quote
 
 import audioop
@@ -32,6 +34,11 @@ TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
 OWNER_PHONE_NUMBER = os.getenv("OWNER_PHONE_NUMBER", "")
 NGROK_URL = os.getenv("NGROK_URL", "")
+
+CLOVER_WEBHOOK_SECRET = os.getenv("CLOVER_WEBHOOK_SECRET", "")
+VOICE_SERVER_INTERNAL_URL = os.getenv("VOICE_SERVER_INTERNAL_URL", "http://localhost:8765")
+
+_CLOVER_RELOAD_TYPES = frozenset({"I", "IC", "IG", "IM"})
 
 if not SONIOX_VOICE_BOT_WS_URL:
     raise ValueError(
@@ -95,6 +102,42 @@ def load_opening_greeting_ulaw() -> bytes | None:
     raise ValueError(
         "OPENING_GREETING_AUDIO_PATH must point to a .wav, .ulaw, or .mulaw file."
     )
+
+
+@app.post("/clover-webhook")
+async def handle_clover_webhook(request: Request):
+    """Receive Clover inventory webhooks and forward a reload signal to the voice server."""
+    body = await request.body()
+    auth_header = request.headers.get("X-Clover-Auth", "")
+
+    if CLOVER_WEBHOOK_SECRET and not hmac.compare_digest(auth_header, CLOVER_WEBHOOK_SECRET):
+        return HTMLResponse(status_code=401, content="Unauthorized")
+
+    try:
+        payload = json.loads(body)
+    except Exception:
+        return HTMLResponse(status_code=400, content="Invalid JSON")
+
+    # Clover format: {"merchants": {"MID": {"data": [{"type": "I", ...}]}}}
+    should_reload = any(
+        event.get("type") in _CLOVER_RELOAD_TYPES
+        for merchant_data in payload.get("merchants", {}).values()
+        for event in merchant_data.get("data", [])
+    )
+
+    if should_reload:
+        def _ping_voice_server() -> None:
+            try:
+                urllib.request.urlopen(
+                    f"{VOICE_SERVER_INTERNAL_URL}/internal/clover-reload",
+                    timeout=3,
+                )
+            except Exception as exc:
+                print(f"clover.webhook.forward_failed: {exc}")
+
+        await asyncio.to_thread(_ping_voice_server)
+
+    return HTMLResponse(status_code=200, content="OK")
 
 
 @app.api_route("/incoming-call", methods=["GET", "POST"])

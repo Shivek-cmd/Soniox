@@ -8,6 +8,8 @@ import httpx
 from openai.types.chat import ChatCompletionFunctionToolParam
 from rapidfuzz import fuzz, process
 
+from clover import CloverError, CloverItemNotFoundError, get_client as _get_clover_client
+
 # ── Load menu.json (single source of truth) ───────────────────────────────────
 
 # Docker: menu.json is copied into /app/ alongside tools.py
@@ -294,13 +296,21 @@ def normalize_item_name(value: str) -> str:
 
 
 def _lookup_price(item_name: str) -> float:
-    """Resolve item name to price using a 4-level fallback chain.
+    """Resolve item name to price using Clover cache first, then 4-level static fallback.
 
-    1. ITEM_ALIASES exact lookup   — known spelling variants
+    0. Clover live cache            — always up to date if client is running
+    1. ITEM_ALIASES exact lookup    — known spelling variants
     2. Exact case-insensitive match — canonical names as-is
     3. All-tokens subset match      — handles word reorder, extra words
     4. rapidfuzz token_sort_ratio   — handles plurals, typos, STT drift
     """
+    # 0. Clover live cache (authoritative price source)
+    _client = _get_clover_client()
+    if _client is not None and _client.available and _client.menu is not None:
+        clover_item = _client.menu.lookup(item_name)
+        if clover_item is not None:
+            return clover_item.price_dollars
+
     name_lower = item_name.strip().lower()
 
     # 1. Alias → canonical → exact price
@@ -534,6 +544,27 @@ check_item_availability_tool_description = ChatCompletionFunctionToolParam(
 async def check_item_availability(item_name: str) -> dict:
     print(f"Running Tool: check_item_availability(item_name='{item_name}')")
 
+    # Clover live cache — authoritative when available
+    _client = _get_clover_client()
+    if _client is not None and _client.available and _client.menu is not None:
+        clover_item = _client.menu.lookup(item_name)
+        if clover_item is not None:
+            return {
+                "available": True,
+                "item": clover_item.name,
+                "price": clover_item.price_dollars,
+                "category": clover_item.category_name,
+                "description": "",
+            }
+        return {
+            "available": False,
+            "message": (
+                f"'{item_name}' is not on our menu. "
+                "Tell the customer this item is unavailable and suggest a similar one."
+            ),
+        }
+
+    # Clover unavailable — fall back to static menu.json
     canonical_name = normalize_item_name(item_name)
     search_lower = canonical_name.strip().lower()
 
@@ -664,12 +695,40 @@ async def place_order(
         }
 
     total_amount = sum(item["price"] * item.get("quantity", 1) for item in items)
-    order_id = f"PS-{datetime.now().strftime('%H%M%S')}"
     wait_time = (
         "20-30 minutes" if order_type == "pickup"
         else "40-60 minutes" if order_type == "delivery"
         else "10-15 minutes"
     )
+
+    # ── Create order in Clover POS ────────────────────────────────────────────
+    clover_order_id: str | None = None
+    _client = _get_clover_client()
+    if _client is not None and _client.available:
+        try:
+            clover_order = await _client.create_order(
+                order_type=order_type,
+                items=items,
+                customer_name=customer_name,
+                phone_number=phone_number,
+                special_instructions=special_instructions,
+                delivery_address=delivery_address,
+            )
+            clover_order_id = clover_order.id
+            print(f"Clover order created: {clover_order_id}")
+        except CloverItemNotFoundError as exc:
+            return {
+                "success": False,
+                "error": (
+                    f"Item '{exc.item_name}' could not be matched in the POS. "
+                    "Ask the customer to clarify the item name."
+                ),
+            }
+        except CloverError as exc:
+            # Network/API failure — fall through to n8n-only path so order still confirms
+            print(f"Clover order creation failed (falling back to n8n): {exc}")
+
+    order_id = clover_order_id or f"PS-{datetime.now().strftime('%H%M%S')}"
 
     n8n_url = os.getenv("N8N_WEBHOOK_URL", "")
     if n8n_url:

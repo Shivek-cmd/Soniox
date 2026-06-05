@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from http import HTTPStatus
 from typing import List
 from urllib.parse import parse_qs, urlparse
 
@@ -20,6 +21,7 @@ from processors.stt import STTProcessor
 from processors.tts import TTSProcessor
 from processors.vad import VADProcessor
 from session import Session
+from clover import CloverClient, CloverError, get_client, set_client
 from tools import (
     LANGUAGE_CONFIG,
     RESTAURANT_NAME,
@@ -257,12 +259,42 @@ async def handle(websocket: ServerConnection):
     await session.run()
 
 
+async def process_request(connection, request):
+    """Handle non-WebSocket HTTP requests to the voice server.
+
+    POST /internal/clover-reload: called by the Twilio bridge when it receives
+    a Clover inventory webhook, so the menu cache is refreshed here where the
+    CloverClient singleton lives.
+    """
+    if request.path == "/internal/clover-reload":
+        client = get_client()
+        if client is not None:
+            client.schedule_menu_reload()
+            log.info("clover.webhook.reload_via_bridge")
+        return connection.respond(HTTPStatus.OK, {}, b"OK\n")
+    return None
+
+
 async def main():
     log.info("Warming up VAD model...")
     VADProcessor.warmup()
+
+    # ── Clover POS init ───────────────────────────────────────────────────────
+    clover_client = CloverClient()
+    try:
+        await clover_client.init()
+    except CloverError as exc:
+        log.critical("clover.init.failed", error=str(exc))
+        raise SystemExit(1) from exc
+    set_client(clover_client)
+    # ─────────────────────────────────────────────────────────────────────────
+
     log.info("Starting WebSocket server", host=WEBSOCKET_HOST, port=WEBSOCKET_PORT)
-    async with serve(handle, WEBSOCKET_HOST, WEBSOCKET_PORT) as server:
-        await server.serve_forever()
+    try:
+        async with serve(handle, WEBSOCKET_HOST, WEBSOCKET_PORT, process_request=process_request) as server:
+            await server.serve_forever()
+    finally:
+        await clover_client.close()
 
 
 if __name__ == "__main__":
