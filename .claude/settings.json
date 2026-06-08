@@ -33,7 +33,11 @@
       "Bash(pip install *)",
       "Bash(dir \"d:\\\\Chrishan Solution\\\\Soniox\\\\soniox_examples\\\\apps\\\\soniox-voice-bot-demo\\\\frontend\\\\src\" /s /b)",
       "Bash(findstr -v node_modules)",
-      "WebFetch(domain:docs.clover.com)"
+      "WebFetch(domain:docs.clover.com)",
+      "Bash(New-Item -ItemType Directory -Force \"d:\\\\Chrishan Solution\\\\Soniox\\\\soniox_examples\\\\apps\\\\soniox-voice-bot-demo\\\\store-api\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Host \"done\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"d:\\\\Chrishan Solution\\\\Soniox\\\\soniox_examples\\\\apps\\\\soniox-voice-bot-demo\\\\store-api\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\shive\\.claude"

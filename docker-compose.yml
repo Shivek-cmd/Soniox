@@ -44,6 +44,15 @@ services:
       - voice-server
     restart: unless-stopped
 
+  store-api:
+    build:
+      context: ./soniox_examples/apps/soniox-voice-bot-demo/store-api
+    environment:
+      - CLOVER_BASE_URL=${CLOVER_BASE_URL}
+      - CLOVER_MERCHANT_ID=${CLOVER_MERCHANT_ID}
+      - CLOVER_ACCESS_TOKEN=${CLOVER_ACCESS_TOKEN}
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./soniox_examples/apps/soniox-voice-bot-demo
@@ -68,6 +77,7 @@ services:
     depends_on:
       - twilio-bridge
       - frontend
+      - store-api
     restart: unless-stopped
 
 volumes:

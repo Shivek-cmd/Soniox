@@ -1,0 +1,1308 @@
+import { useEffect, useReducer, useState } from "react";
+import { MENU_CATEGORIES } from "../utils/menuData";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface StoreModifier {
+  id: string;
+  name: string;
+  price: number; // cents
+}
+
+interface StoreModifierGroup {
+  id: string;
+  name: string;
+  min_required: number;
+  max_allowed: number;
+  modifiers: StoreModifier[];
+}
+
+interface StoreItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number; // cents
+  price_display: string;
+  category_id: string;
+  category_name: string;
+  image_url: string | null;
+  modifier_groups: StoreModifierGroup[];
+  available?: boolean;
+}
+
+interface StoreCategory {
+  id: string;
+  name: string;
+  sort_order: number;
+}
+
+interface CartEntry {
+  key: string;
+  item: StoreItem;
+  quantity: number;
+  selected_modifiers: StoreModifier[];
+  modifier_extra: number; // cents
+  note: string;
+}
+
+type CartAction =
+  | { type: "ADD";       entry: CartEntry }
+  | { type: "INCREMENT"; key: string }
+  | { type: "DECREMENT"; key: string }
+  | { type: "REMOVE";    key: string }
+  | { type: "CLEAR" };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cart reducer
+// ─────────────────────────────────────────────────────────────────────────────
+
+function cartReducer(state: CartEntry[], action: CartAction): CartEntry[] {
+  switch (action.type) {
+    case "ADD": {
+      const idx = state.findIndex(e => e.key === action.entry.key);
+      if (idx !== -1) {
+        return state.map((e, i) =>
+          i === idx ? { ...e, quantity: e.quantity + action.entry.quantity } : e
+        );
+      }
+      return [...state, action.entry];
+    }
+    case "INCREMENT":
+      return state.map(e => e.key === action.key ? { ...e, quantity: e.quantity + 1 } : e);
+    case "DECREMENT":
+      return state.map(e =>
+        e.key === action.key ? { ...e, quantity: Math.max(1, e.quantity - 1) } : e
+      );
+    case "REMOVE":
+      return state.filter(e => e.key !== action.key);
+    case "CLEAR":
+      return [];
+    default:
+      return state;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STORE_API: string = import.meta.env.VITE_STORE_API_URL ?? "/store-api";
+
+// Category → emoji + gradient theme
+const CAT_THEME: Record<string, { emoji: string; grad: string; accent: string }> = {
+  samosa:          { emoji: "🥟", grad: "linear-gradient(135deg,#f59e0b1a,#92400e1a)", accent: "#f59e0b" },
+  parkash_classic: { emoji: "🍛", grad: "linear-gradient(135deg,#ea580c1a,#7c2d121a)", accent: "#ea580c" },
+  chaat:           { emoji: "🍲", grad: "linear-gradient(135deg,#84cc161a,#1665301a)", accent: "#84cc16" },
+  pakora:          { emoji: "🧆", grad: "linear-gradient(135deg,#d977061a,#78350f1a)", accent: "#d97706" },
+  bread_pakora:    { emoji: "🥪", grad: "linear-gradient(135deg,#b453091a,#7c2d121a)", accent: "#b45309" },
+  burger_sandwich: { emoji: "🍔", grad: "linear-gradient(135deg,#ef44441a,#9918291a)", accent: "#ef4444" },
+  parantha:        { emoji: "🫓", grad: "linear-gradient(135deg,#fbbf241a,#92400e1a)", accent: "#fbbf24" },
+  desserts:        { emoji: "🍮", grad: "linear-gradient(135deg,#f43f5e1a,#8817351a)", accent: "#f43f5e" },
+  shake_faluda:    { emoji: "🥛", grad: "linear-gradient(135deg,#8b5cf61a,#4c1d951a)", accent: "#8b5cf6" },
+  beverages:       { emoji: "🍵", grad: "linear-gradient(135deg,#0d94801a,#0640341a)", accent: "#0d9488" },
+  sides:           { emoji: "🥗", grad: "linear-gradient(135deg,#22c55e1a,#14532d1a)", accent: "#22c55e" },
+  all_snacks:      { emoji: "🍱", grad: "linear-gradient(135deg,#f59e0b1a,#78350f1a)", accent: "#f59e0b" },
+};
+
+function catTheme(catId: string) {
+  return (
+    CAT_THEME[catId] ?? {
+      emoji: "🍽️",
+      grad:  "linear-gradient(135deg,#f59e0b1a,#92400e1a)",
+      accent: "#f59e0b",
+    }
+  );
+}
+
+function cartKey(itemId: string, modIds: string[]): string {
+  return `${itemId}__${[...modIds].sort().join(",")}`;
+}
+
+function cad(cents: number) {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Store component
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function Store() {
+  const [categories, setCategories] = useState<StoreCategory[]>([]);
+  const [items,      setItems]      = useState<StoreItem[]>([]);
+  const [loading,    setLoading]    = useState(true);
+
+  const [activeCategory, setActiveCategory] = useState("all");
+  const [search,         setSearch]         = useState("");
+
+  const [selectedItem,   setSelectedItem]   = useState<StoreItem | null>(null);
+  const [showCheckout,   setShowCheckout]   = useState(false);
+  const [confirmedOrder, setConfirmedOrder] = useState<{ order_id: string; total: number } | null>(null);
+
+  const [cart, dispatch] = useReducer(cartReducer, []);
+
+  useEffect(() => { loadMenu(); }, []);
+
+  async function loadMenu() {
+    try {
+      const resp = await fetch(`${STORE_API}/menu`, {
+        signal: AbortSignal.timeout(6000),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      setCategories(data.categories);
+      setItems(data.items);
+    } catch {
+      loadFallback();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function loadFallback() {
+    const cats: StoreCategory[] = MENU_CATEGORIES.map((c, i) => ({
+      id: c.id, name: c.label, sort_order: i,
+    }));
+    const itemList: StoreItem[] = MENU_CATEGORIES.flatMap(c =>
+      c.items.map(item => ({
+        id:              `local-${item.name.toLowerCase().replace(/\W+/g, "-")}`,
+        name:            item.name,
+        description:     item.description ?? "",
+        price:           Math.round((item.price ?? 0) * 100),
+        price_display:   `$${(item.price ?? 0).toFixed(2)}`,
+        category_id:     c.id,
+        category_name:   c.label,
+        image_url:       null,
+        modifier_groups: [],
+        available:       true,
+      }))
+    );
+    setCategories(cats);
+    setItems(itemList);
+  }
+
+  const filtered = items.filter(item => {
+    if (item.available === false) return false;
+    const catMatch = activeCategory === "all" || item.category_id === activeCategory;
+    const q = search.trim().toLowerCase();
+    const searchMatch = !q
+      || item.name.toLowerCase().includes(q)
+      || item.description.toLowerCase().includes(q);
+    return catMatch && searchMatch;
+  });
+
+  const cartCount = cart.reduce((s, e) => s + e.quantity, 0);
+  const cartTotal = cart.reduce((s, e) => s + (e.item.price + e.modifier_extra) * e.quantity, 0);
+
+  function addDirect(item: StoreItem) {
+    dispatch({
+      type: "ADD",
+      entry: { key: cartKey(item.id, []), item, quantity: 1, selected_modifiers: [], modifier_extra: 0, note: "" },
+    });
+  }
+
+  return (
+    <div className="h-full flex overflow-hidden" style={{ background: "var(--bg)" }}>
+
+      {/* ── Menu area ─────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+
+        {/* Top bar */}
+        <div
+          className="flex-none px-5 pt-4 pb-3 border-b"
+          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+        >
+          {/* Search */}
+          <div className="relative mb-3">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-dim)" }}>
+              <SearchIcon />
+            </span>
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search menu…"
+              className="w-full pl-9 pr-9 py-2 rounded-xl text-sm outline-none transition-colors"
+              style={{
+                background: "var(--surface-raised)",
+                border: "1px solid var(--border)",
+                color: "var(--text)",
+              }}
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs leading-none"
+                style={{ color: "var(--text-dim)" }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Category pills */}
+          <div className="flex gap-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+            <Pill active={activeCategory === "all"} onClick={() => setActiveCategory("all")}>
+              All
+            </Pill>
+            {categories.map(cat => (
+              <Pill
+                key={cat.id}
+                active={activeCategory === cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+              >
+                {cat.name}
+              </Pill>
+            ))}
+          </div>
+        </div>
+
+        {/* Section label */}
+        {!loading && (
+          <div className="flex-none flex items-baseline gap-2 px-5 pt-3 pb-1">
+            <span
+              className="text-xs font-semibold uppercase tracking-widest"
+              style={{ color: "var(--text-dim)" }}
+            >
+              {search
+                ? `Results for "${search}"`
+                : activeCategory === "all"
+                ? "Full Menu"
+                : categories.find(c => c.id === activeCategory)?.name ?? ""}
+            </span>
+            <span className="text-xs" style={{ color: "var(--text-dim)" }}>
+              — {filtered.length} {filtered.length === 1 ? "item" : "items"}
+            </span>
+          </div>
+        )}
+
+        {/* Grid */}
+        <div className="flex-1 overflow-y-auto px-5 pt-2 pb-6">
+          {loading ? (
+            <SkeletonGrid />
+          ) : filtered.length === 0 ? (
+            <EmptyState query={search} />
+          ) : (
+            <div
+              className="grid gap-3"
+              style={{ gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))" }}
+            >
+              {filtered.map(item => (
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  onOpen={() => setSelectedItem(item)}
+                  onAdd={() => {
+                    if (item.modifier_groups.length > 0) setSelectedItem(item);
+                    else addDirect(item);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Cart sidebar ──────────────────────────────────────── */}
+      <CartSidebar
+        cart={cart}
+        count={cartCount}
+        total={cartTotal}
+        dispatch={dispatch}
+        onCheckout={() => setShowCheckout(true)}
+      />
+
+      {/* ── Modals ────────────────────────────────────────────── */}
+      {selectedItem && (
+        <ItemModal
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onAdd={entry => { dispatch({ type: "ADD", entry }); setSelectedItem(null); }}
+        />
+      )}
+
+      {showCheckout && !confirmedOrder && (
+        <CheckoutModal
+          cart={cart}
+          total={cartTotal}
+          onClose={() => setShowCheckout(false)}
+          onConfirmed={order => {
+            setConfirmedOrder(order);
+            dispatch({ type: "CLEAR" });
+          }}
+        />
+      )}
+
+      {confirmedOrder && (
+        <SuccessOverlay
+          order={confirmedOrder}
+          onDone={() => { setConfirmedOrder(null); setShowCheckout(false); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Category pill
+// ─────────────────────────────────────────────────────────────────────────────
+
+function Pill({
+  active, onClick, children,
+}: {
+  active: boolean; onClick: () => void; children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex-none px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all duration-150"
+      style={
+        active
+          ? { background: "var(--accent)", color: "#000" }
+          : {
+              background: "var(--surface-raised)",
+              color: "var(--text-muted)",
+              border: "1px solid var(--border)",
+            }
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Item card
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ItemCard({
+  item, onOpen, onAdd,
+}: {
+  item: StoreItem; onOpen: () => void; onAdd: () => void;
+}) {
+  const theme = catTheme(item.category_id);
+  const [flash, setFlash] = useState(false);
+
+  function handleAdd(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (item.modifier_groups.length > 0) { onAdd(); return; }
+    setFlash(true);
+    onAdd();
+    setTimeout(() => setFlash(false), 700);
+  }
+
+  return (
+    <div
+      onClick={onOpen}
+      className="flex flex-col rounded-2xl overflow-hidden cursor-pointer group"
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        boxShadow: "0 2px 12px rgba(0,0,0,0.2)",
+        transition: "transform 0.15s ease, box-shadow 0.15s ease",
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+        (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 28px rgba(0,0,0,0.35)";
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+        (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 12px rgba(0,0,0,0.2)";
+      }}
+    >
+      {/* Thumbnail */}
+      <div
+        className="flex-none flex items-center justify-center"
+        style={{ height: 108, background: theme.grad }}
+      >
+        <span
+          style={{
+            fontSize: 48,
+            lineHeight: 1,
+            filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.25))",
+            transition: "transform 0.2s ease",
+          }}
+          className="group-hover:scale-110"
+        >
+          {theme.emoji}
+        </span>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 flex flex-col px-3 pt-2.5 pb-3">
+        <p className="text-sm font-semibold leading-snug" style={{ color: "var(--text)" }}>
+          {item.name}
+        </p>
+
+        {item.description && (
+          <p
+            className="text-xs mt-0.5 leading-relaxed"
+            style={{
+              color: "var(--text-dim)",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {item.description}
+          </p>
+        )}
+
+        {item.modifier_groups.length > 0 && (
+          <p className="text-xs mt-1" style={{ color: "var(--text-dim)" }}>
+            Customizable ›
+          </p>
+        )}
+
+        {/* Price + Add */}
+        <div className="flex items-center justify-between mt-auto pt-2.5">
+          <span className="text-sm font-bold" style={{ color: theme.accent }}>
+            {item.price_display}
+          </span>
+          <button
+            onClick={handleAdd}
+            className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition-all duration-150 active:scale-95"
+            style={{
+              background: flash ? "#22c55e" : "var(--accent)",
+              color: "#000",
+              minWidth: 52,
+              justifyContent: "center",
+            }}
+          >
+            {flash ? "✓" : "+ Add"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cart sidebar
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CartSidebar({
+  cart, count, total, dispatch, onCheckout,
+}: {
+  cart: CartEntry[];
+  count: number;
+  total: number;
+  dispatch: React.Dispatch<CartAction>;
+  onCheckout: () => void;
+}) {
+  const gst   = Math.round(total * 0.05);
+  const grand = total + gst;
+
+  return (
+    <div
+      className="flex-none flex flex-col border-l"
+      style={{ width: 304, borderColor: "var(--border)", background: "var(--surface)" }}
+    >
+      {/* Header */}
+      <div
+        className="flex-none flex items-center justify-between px-4 py-3 border-b"
+        style={{ borderColor: "var(--border)" }}
+      >
+        <div className="flex items-center gap-2">
+          <CartIcon />
+          <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+            Your Cart
+          </span>
+        </div>
+        {count > 0 && (
+          <span
+            className="text-xs px-2 py-0.5 rounded-full font-bold"
+            style={{ background: "var(--accent)", color: "#000" }}
+          >
+            {count}
+          </span>
+        )}
+      </div>
+
+      {/* Items list */}
+      <div className="flex-1 overflow-y-auto">
+        {cart.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center gap-3 px-4 select-none">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center"
+              style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}
+            >
+              <span style={{ fontSize: 28 }}>🛒</span>
+            </div>
+            <p className="text-xs text-center leading-relaxed" style={{ color: "var(--text-dim)" }}>
+              Your cart is empty.
+              <br />
+              Pick something delicious!
+            </p>
+          </div>
+        ) : (
+          <div className="px-3 py-2 flex flex-col gap-2">
+            {cart.map(entry => (
+              <CartRow key={entry.key} entry={entry} dispatch={dispatch} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Totals + CTA */}
+      {cart.length > 0 && (
+        <div className="flex-none border-t" style={{ borderColor: "var(--border)" }}>
+          <div className="px-4 py-3 flex flex-col gap-1.5">
+            <PriceRow label="Subtotal" value={total} />
+            <PriceRow label="GST (5%)" value={gst} />
+            <div
+              className="flex items-center justify-between pt-2.5 mt-1 border-t"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <span className="text-sm font-bold" style={{ color: "var(--text)" }}>Total</span>
+              <span className="text-base font-black" style={{ color: "var(--accent)" }}>
+                {cad(grand)}
+              </span>
+            </div>
+          </div>
+          <div className="px-4 pb-4">
+            <button
+              onClick={onCheckout}
+              className="w-full py-3 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90 active:scale-[.98]"
+              style={{
+                background: "var(--accent)",
+                boxShadow: "0 2px 16px rgba(245,158,11,0.3)",
+              }}
+            >
+              Place Order →
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CartRow({ entry, dispatch }: { entry: CartEntry; dispatch: React.Dispatch<CartAction> }) {
+  const theme     = catTheme(entry.item.category_id);
+  const unitPrice = entry.item.price + entry.modifier_extra;
+
+  return (
+    <div
+      className="flex items-start gap-2.5 rounded-xl px-2.5 py-2"
+      style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}
+    >
+      {/* Emoji thumb */}
+      <div
+        className="flex-none w-9 h-9 rounded-lg flex items-center justify-center text-xl"
+        style={{ background: theme.grad }}
+      >
+        {theme.emoji}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold truncate" style={{ color: "var(--text)" }}>
+          {entry.item.name}
+        </p>
+        {entry.selected_modifiers.length > 0 && (
+          <p className="text-xs truncate" style={{ color: "var(--text-dim)" }}>
+            {entry.selected_modifiers.map(m => m.name).join(", ")}
+          </p>
+        )}
+
+        <div className="flex items-center justify-between mt-1.5">
+          {/* Qty stepper */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => dispatch({ type: "DECREMENT", key: entry.key })}
+              className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
+              style={{ background: "var(--border)", color: "var(--text-muted)" }}
+            >
+              −
+            </button>
+            <span className="text-xs font-semibold w-4 text-center" style={{ color: "var(--text)" }}>
+              {entry.quantity}
+            </span>
+            <button
+              onClick={() => dispatch({ type: "INCREMENT", key: entry.key })}
+              className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
+              style={{ background: "var(--accent)", color: "#000" }}
+            >
+              +
+            </button>
+          </div>
+          <span className="text-xs font-bold" style={{ color: theme.accent }}>
+            {cad(unitPrice * entry.quantity)}
+          </span>
+        </div>
+      </div>
+
+      {/* Remove */}
+      <button
+        onClick={() => dispatch({ type: "REMOVE", key: entry.key })}
+        className="flex-none mt-0.5 text-xs leading-none transition-colors hover:text-red-400"
+        style={{ color: "var(--text-dim)" }}
+        title="Remove item"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function PriceRow({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</span>
+      <span className="text-xs font-medium" style={{ color: "var(--text)" }}>{cad(value)}</span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Item modal
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ItemModal({
+  item, onClose, onAdd,
+}: {
+  item: StoreItem;
+  onClose: () => void;
+  onAdd: (entry: CartEntry) => void;
+}) {
+  const theme = catTheme(item.category_id);
+
+  const [qty,          setQty]          = useState(1);
+  const [selectedMods, setSelectedMods] = useState<Record<string, StoreModifier[]>>({});
+
+  const allMods     = Object.values(selectedMods).flat();
+  const modExtra    = allMods.reduce((s, m) => s + m.price, 0);
+  const unitPrice   = item.price + modExtra;
+  const totalPrice  = unitPrice * qty;
+
+  const requiredMet = item.modifier_groups
+    .filter(g => g.min_required > 0)
+    .every(g => (selectedMods[g.id]?.length ?? 0) >= g.min_required);
+
+  function toggleMod(group: StoreModifierGroup, mod: StoreModifier) {
+    setSelectedMods(prev => {
+      const cur = prev[group.id] ?? [];
+      if (group.max_allowed === 1) {
+        // Radio: toggle selection
+        return { ...prev, [group.id]: cur.some(m => m.id === mod.id) ? [] : [mod] };
+      }
+      // Checkbox: add or remove
+      const has = cur.some(m => m.id === mod.id);
+      const next = has
+        ? cur.filter(m => m.id !== mod.id)
+        : cur.length < group.max_allowed ? [...cur, mod] : cur;
+      return { ...prev, [group.id]: next };
+    });
+  }
+
+  function handleAdd() {
+    const modIds = allMods.map(m => m.id);
+    onAdd({
+      key:                cartKey(item.id, modIds),
+      item,
+      quantity:           qty,
+      selected_modifiers: allMods,
+      modifier_extra:     modExtra,
+      note:               "",
+    });
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div
+        className="relative flex flex-col rounded-2xl overflow-hidden"
+        style={{
+          width: 440, maxHeight: "86vh",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.75)",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Hero */}
+        <div
+          className="flex-none relative flex items-center justify-center"
+          style={{ height: 140, background: theme.grad }}
+        >
+          <span style={{ fontSize: 72, lineHeight: 1, filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.35))" }}>
+            {theme.emoji}
+          </span>
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 w-7 h-7 rounded-full flex items-center justify-center text-xs"
+            style={{ background: "rgba(0,0,0,0.45)", color: "#fff" }}
+          >
+            ✕
+          </button>
+          {/* Category badge */}
+          <span
+            className="absolute bottom-3 left-4 text-xs px-2.5 py-1 rounded-full font-medium"
+            style={{ background: "rgba(0,0,0,0.45)", color: "#fff", backdropFilter: "blur(4px)" }}
+          >
+            {item.category_name}
+          </span>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <h2 className="text-lg font-bold leading-tight" style={{ color: "var(--text)" }}>
+              {item.name}
+            </h2>
+            <span className="text-base font-black flex-none" style={{ color: theme.accent }}>
+              {item.price_display}
+            </span>
+          </div>
+
+          {item.description && (
+            <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--text-muted)" }}>
+              {item.description}
+            </p>
+          )}
+
+          {/* Modifier groups */}
+          {item.modifier_groups.map(group => {
+            const sel = selectedMods[group.id] ?? [];
+            return (
+              <div key={group.id} className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span
+                    className="text-xs font-semibold uppercase tracking-wide"
+                    style={{ color: "var(--text-dim)" }}
+                  >
+                    {group.name}
+                  </span>
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full"
+                    style={
+                      group.min_required > 0
+                        ? { background: "rgba(245,158,11,0.15)", color: "var(--accent)" }
+                        : { background: "var(--surface-raised)", color: "var(--text-dim)" }
+                    }
+                  >
+                    {group.min_required > 0 ? "Required" : "Optional"}
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  {group.modifiers.map(mod => {
+                    const isSel = sel.some(m => m.id === mod.id);
+                    const isRadio = group.max_allowed === 1;
+                    return (
+                      <button
+                        key={mod.id}
+                        onClick={() => toggleMod(group, mod)}
+                        className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-all"
+                        style={{
+                          background: isSel ? `${theme.accent}18` : "var(--surface-raised)",
+                          border: `1px solid ${isSel ? theme.accent : "var(--border)"}`,
+                        }}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {/* Radio / checkbox indicator */}
+                          <span
+                            className="w-4 h-4 flex-none flex items-center justify-center"
+                            style={{
+                              background: isSel ? theme.accent : "transparent",
+                              border: `1.5px solid ${isSel ? theme.accent : "var(--border)"}`,
+                              borderRadius: isRadio ? "50%" : 4,
+                            }}
+                          >
+                            {isSel && (
+                              <span style={{ fontSize: 9, fontWeight: 900, color: "#000" }}>✓</span>
+                            )}
+                          </span>
+                          <span className="text-sm" style={{ color: "var(--text)" }}>{mod.name}</span>
+                        </div>
+                        {mod.price > 0 && (
+                          <span className="text-xs" style={{ color: "var(--text-dim)" }}>
+                            +{cad(mod.price)}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="flex-none flex items-center gap-3 px-5 py-4 border-t"
+          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+        >
+          {/* Quantity */}
+          <div
+            className="flex items-center gap-3 rounded-xl px-3 py-2"
+            style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}
+          >
+            <button
+              onClick={() => setQty(q => Math.max(1, q - 1))}
+              className="w-6 h-6 rounded-lg flex items-center justify-center font-bold text-sm"
+              style={{ background: "var(--border)", color: "var(--text-muted)" }}
+            >
+              −
+            </button>
+            <span className="text-sm font-bold w-5 text-center" style={{ color: "var(--text)" }}>
+              {qty}
+            </span>
+            <button
+              onClick={() => setQty(q => q + 1)}
+              className="w-6 h-6 rounded-lg flex items-center justify-center font-bold text-sm"
+              style={{ background: "var(--accent)", color: "#000" }}
+            >
+              +
+            </button>
+          </div>
+
+          {/* Add to cart */}
+          <button
+            onClick={handleAdd}
+            disabled={!requiredMet}
+            className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-[.98] disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              background: requiredMet ? "var(--accent)" : "var(--surface-raised)",
+              color: requiredMet ? "#000" : "var(--text-dim)",
+              boxShadow: requiredMet ? "0 2px 12px rgba(245,158,11,0.3)" : "none",
+            }}
+          >
+            Add to Cart — {cad(totalPrice)}
+          </button>
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Checkout modal
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CheckoutModal({
+  cart, total, onClose, onConfirmed,
+}: {
+  cart: CartEntry[];
+  total: number;
+  onClose: () => void;
+  onConfirmed: (order: { order_id: string; total: number }) => void;
+}) {
+  const gst   = Math.round(total * 0.05);
+  const grand = total + gst;
+
+  const [name,      setName]      = useState("");
+  const [phone,     setPhone]     = useState("");
+  const [orderType, setOrderType] = useState<"pickup" | "dine_in">("pickup");
+  const [note,      setNote]      = useState("");
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState<string | null>(null);
+
+  async function confirm() {
+    if (!name.trim()) { setError("Please enter your name."); return; }
+    setLoading(true); setError(null);
+    try {
+      const resp = await fetch(`${STORE_API}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: cart.map(e => ({
+            item_id:      e.item.id,
+            name:         e.item.name,
+            price:        e.item.price,
+            quantity:     e.quantity,
+            modifier_ids: e.selected_modifiers.map(m => m.id),
+            note:         e.note,
+          })),
+          order_type:     orderType,
+          customer_name:  name.trim(),
+          customer_phone: phone.trim(),
+          note:           note.trim(),
+        }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error((body as any).detail ?? `Server error (${resp.status})`);
+      }
+      const data = await resp.json();
+      onConfirmed({ order_id: data.order_id, total: grand });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to place order. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div
+        className="relative flex flex-col rounded-2xl overflow-hidden"
+        style={{
+          width: 480, maxHeight: "90vh",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.75)",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex-none flex items-center justify-between px-5 py-4 border-b"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div>
+            <h2 className="text-base font-bold" style={{ color: "var(--text)" }}>Confirm Order</h2>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+              Parkash Sweets · Edmonton, AB
+            </p>
+          </div>
+          <button onClick={onClose} style={{ color: "var(--text-dim)" }} className="text-sm">✕</button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
+
+          {/* Order type */}
+          <div>
+            <Label>Order Type</Label>
+            <div className="flex gap-2 mt-2">
+              {(["pickup", "dine_in"] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setOrderType(t)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
+                  style={
+                    orderType === t
+                      ? { background: "var(--accent)", color: "#000" }
+                      : {
+                          background: "var(--surface-raised)",
+                          color: "var(--text-muted)",
+                          border: "1px solid var(--border)",
+                        }
+                  }
+                >
+                  {t === "pickup" ? "🥡  Pickup" : "🍽️  Dine-in"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Name */}
+          <div>
+            <Label>Your Name *</Label>
+            <input
+              type="text"
+              placeholder="e.g. Harpreet Singh"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-full mt-2 px-4 py-2.5 rounded-xl text-sm outline-none transition-colors"
+              style={{
+                background: "var(--surface-raised)",
+                border: `1px solid ${name.trim() ? "var(--accent)" : "var(--border)"}`,
+                color: "var(--text)",
+              }}
+            />
+          </div>
+
+          {/* Phone */}
+          <div>
+            <Label>Phone (optional)</Label>
+            <input
+              type="tel"
+              placeholder="780-555-0100"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              className="w-full mt-2 px-4 py-2.5 rounded-xl text-sm outline-none"
+              style={{
+                background: "var(--surface-raised)",
+                border: "1px solid var(--border)",
+                color: "var(--text)",
+              }}
+            />
+          </div>
+
+          {/* Instructions */}
+          <div>
+            <Label>Special Instructions</Label>
+            <textarea
+              placeholder="Any special requests…"
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              rows={2}
+              className="w-full mt-2 px-4 py-2.5 rounded-xl text-sm outline-none resize-none"
+              style={{
+                background: "var(--surface-raised)",
+                border: "1px solid var(--border)",
+                color: "var(--text)",
+              }}
+            />
+          </div>
+
+          {/* Order summary */}
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{ border: "1px solid var(--border)", background: "var(--surface-raised)" }}
+          >
+            <div
+              className="px-4 py-2 border-b"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <span
+                className="text-xs font-semibold uppercase tracking-wide"
+                style={{ color: "var(--text-dim)" }}
+              >
+                Order Summary
+              </span>
+            </div>
+            <div className="px-4 py-3 flex flex-col gap-1.5">
+              {cart.map(e => (
+                <div key={e.key} className="flex justify-between gap-2 text-xs">
+                  <span style={{ color: "var(--text-muted)" }}>
+                    {e.quantity}× {e.item.name}
+                    {e.selected_modifiers.length > 0 && (
+                      <span style={{ color: "var(--text-dim)" }}>
+                        {" "}({e.selected_modifiers.map(m => m.name).join(", ")})
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-medium flex-none" style={{ color: "var(--text)" }}>
+                    {cad((e.item.price + e.modifier_extra) * e.quantity)}
+                  </span>
+                </div>
+              ))}
+
+              <div
+                className="flex flex-col gap-1 border-t pt-2 mt-1"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <div className="flex justify-between text-xs">
+                  <span style={{ color: "var(--text-muted)" }}>Subtotal</span>
+                  <span style={{ color: "var(--text)" }}>{cad(total)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span style={{ color: "var(--text-muted)" }}>GST (5%)</span>
+                  <span style={{ color: "var(--text)" }}>{cad(gst)}</span>
+                </div>
+                <div
+                  className="flex justify-between text-sm font-bold border-t pt-2 mt-0.5"
+                  style={{ borderColor: "var(--border)" }}
+                >
+                  <span style={{ color: "var(--text)" }}>Total</span>
+                  <span style={{ color: "var(--accent)" }}>{cad(grand)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div
+              className="px-3 py-2 rounded-xl text-xs"
+              style={{
+                background: "rgba(239,68,68,0.1)",
+                border: "1px solid rgba(239,68,68,0.2)",
+                color: "#f87171",
+              }}
+            >
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* CTA */}
+        <div
+          className="flex-none px-5 py-4 border-t"
+          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+        >
+          <button
+            onClick={confirm}
+            disabled={loading || !name.trim()}
+            className="w-full py-3 rounded-xl text-sm font-bold text-black transition-all active:scale-[.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: "var(--accent)",
+              boxShadow: "0 2px 16px rgba(245,158,11,0.3)",
+            }}
+          >
+            {loading ? "Placing Order…" : `Confirm Order — ${cad(grand)}`}
+          </button>
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Order success overlay
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SuccessOverlay({
+  order, onDone,
+}: {
+  order: { order_id: string; total: number };
+  onDone: () => void;
+}) {
+  return (
+    <Overlay onClose={onDone}>
+      <div
+        className="flex flex-col items-center text-center rounded-2xl px-8 py-10"
+        style={{
+          width: 360,
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.75)",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Check circle */}
+        <div
+          className="w-20 h-20 rounded-full flex items-center justify-center mb-5"
+          style={{
+            background: "rgba(34,197,94,0.12)",
+            border: "2px solid rgba(34,197,94,0.3)",
+          }}
+        >
+          <span style={{ fontSize: 40 }}>✅</span>
+        </div>
+
+        <h2 className="text-xl font-black mb-1" style={{ color: "var(--text)" }}>
+          Order Placed!
+        </h2>
+        <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+          Your order is confirmed at Parkash Sweets.
+        </p>
+
+        {/* Order details card */}
+        <div
+          className="w-full rounded-xl px-5 py-4 mb-6 text-left"
+          style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}
+        >
+          <div className="flex justify-between mb-2">
+            <span className="text-xs" style={{ color: "var(--text-dim)" }}>Order ID</span>
+            <span
+              className="text-xs font-bold"
+              style={{ color: "var(--accent)", fontFamily: "monospace" }}
+            >
+              {order.order_id}
+            </span>
+          </div>
+          <div className="flex justify-between mb-2">
+            <span className="text-xs" style={{ color: "var(--text-dim)" }}>Total (incl. GST)</span>
+            <span className="text-xs font-bold" style={{ color: "var(--text)" }}>
+              {cad(order.total)}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-xs" style={{ color: "var(--text-dim)" }}>Est. wait</span>
+            <span className="text-xs font-bold" style={{ color: "#22c55e" }}>15 – 25 min</span>
+          </div>
+        </div>
+
+        <button
+          onClick={onDone}
+          className="w-full py-3 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90 active:scale-[.98]"
+          style={{ background: "var(--accent)" }}
+        >
+          Back to Menu
+        </button>
+      </div>
+    </Overlay>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared overlay wrapper
+// ─────────────────────────────────────────────────────────────────────────────
+
+function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center z-50 p-4"
+      style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)" }}
+      onClick={onClose}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility components
+// ─────────────────────────────────────────────────────────────────────────────
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className="text-xs font-semibold uppercase tracking-wide"
+      style={{ color: "var(--text-dim)" }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SkeletonGrid() {
+  return (
+    <div
+      className="grid gap-3"
+      style={{ gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))" }}
+    >
+      {Array.from({ length: 12 }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-2xl overflow-hidden animate-pulse"
+          style={{
+            height: 196,
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ query }: { query: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-64 gap-3 select-none">
+      <span style={{ fontSize: 40 }}>🔍</span>
+      <p className="text-sm font-medium" style={{ color: "var(--text-muted)" }}>
+        {query ? `No results for "${query}"` : "No items in this category"}
+      </p>
+      <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+        Try a different search or category
+      </p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Icons
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SearchIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function CartIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+      stroke="var(--text-muted)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
+      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+    </svg>
+  );
+}

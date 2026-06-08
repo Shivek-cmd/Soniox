@@ -5,6 +5,13 @@
         reverse_proxy voice-server:8765
     }
 
+    # Store API → store-api service
+    @store_api path /store-api /store-api/*
+    handle @store_api {
+        uri strip_prefix /store-api
+        reverse_proxy store-api:8766
+    }
+
     # Twilio phone call endpoints + Clover webhook → twilio-bridge
     @twilio path /incoming-call /transfer-twiml /media-stream /clover-webhook
     handle @twilio {
