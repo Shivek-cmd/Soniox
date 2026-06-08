@@ -1,18 +1,29 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Conversation } from "./components/conversation";
 import { Store } from "./components/Store";
 
 type Tab = "ai" | "store";
 
+function useIsMobile(breakpoint = 640) {
+  const [m, setM] = useState(() => window.innerWidth < breakpoint);
+  useEffect(() => {
+    const fn = () => setM(window.innerWidth < breakpoint);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, [breakpoint]);
+  return m;
+}
+
 function App() {
   const [tab, setTab] = useState<Tab>("ai");
+  const isMobile = useIsMobile();
 
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ background: "var(--bg)" }}>
 
       {/* ── Header ──────────────────────────────────────────────────── */}
       <header
-        className="flex-none flex items-center gap-3 px-5 py-3 border-b"
+        className="flex-none flex items-center gap-3 px-4 py-3 border-b"
         style={{ borderColor: "var(--border)", background: "var(--surface)" }}
       >
         {/* Logo mark */}
@@ -24,7 +35,7 @@ function App() {
         </div>
 
         {/* Brand */}
-        <div className="flex flex-col leading-none mr-4">
+        <div className="flex flex-col leading-none">
           <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>
             Parkash Sweets
           </span>
@@ -33,43 +44,75 @@ function App() {
           </span>
         </div>
 
-        {/* Tab switcher */}
-        <div
-          className="flex items-center gap-1 rounded-xl p-1"
-          style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}
-        >
-          <TabButton
-            active={tab === "ai"}
-            onClick={() => setTab("ai")}
-            icon={<MicIcon />}
-            label="Order with Sierra"
-          />
-          <TabButton
-            active={tab === "store"}
-            onClick={() => setTab("store")}
-            icon={<StoreIcon />}
-            label="Browse Store"
-          />
-        </div>
+        {/* Tab switcher — desktop only */}
+        {!isMobile && (
+          <div
+            className="flex items-center gap-1 rounded-xl p-1 ml-4"
+            style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}
+          >
+            <TabButton
+              active={tab === "ai"}
+              onClick={() => setTab("ai")}
+              icon={<MicIcon />}
+              label="Order with Sierra"
+            />
+            <TabButton
+              active={tab === "store"}
+              onClick={() => setTab("store")}
+              icon={<StoreIcon />}
+              label="Browse Store"
+            />
+          </div>
+        )}
 
         {/* Online indicator */}
         <div className="ml-auto flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>Online</span>
+          {!isMobile && (
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>Online</span>
+          )}
         </div>
       </header>
 
       {/* ── Main ────────────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-hidden">
+      <main
+        className="flex-1 overflow-hidden"
+        style={{ paddingBottom: isMobile ? 64 : 0 }}
+      >
         {tab === "ai" && <Conversation />}
         {tab === "store" && <Store />}
       </main>
+
+      {/* ── Mobile bottom nav ───────────────────────────────────────── */}
+      {isMobile && (
+        <nav
+          className="fixed bottom-0 inset-x-0 flex border-t z-40"
+          style={{
+            background: "var(--surface)",
+            borderColor: "var(--border)",
+            height: 64,
+          }}
+        >
+          <MobileNavBtn
+            active={tab === "ai"}
+            onClick={() => setTab("ai")}
+            icon={<MicIcon size={22} />}
+            label="Order"
+          />
+          <MobileNavBtn
+            active={tab === "store"}
+            onClick={() => setTab("store")}
+            icon={<StoreIcon size={22} />}
+            label="Browse"
+          />
+        </nav>
+      )}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────
-// Tab button
+// Desktop tab button
 // ─────────────────────────────────────────────
 function TabButton({
   active, onClick, icon, label,
@@ -98,6 +141,29 @@ function TabButton({
     >
       {icon}
       {label}
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Mobile bottom nav button
+// ─────────────────────────────────────────────
+function MobileNavBtn({
+  active, onClick, icon, label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex-1 flex flex-col items-center justify-center gap-1 transition-all duration-150 active:scale-95"
+      style={{ color: active ? "var(--accent)" : "var(--text-dim)" }}
+    >
+      {icon}
+      <span className="text-xs font-semibold">{label}</span>
     </button>
   );
 }

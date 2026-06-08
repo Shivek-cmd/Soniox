@@ -22,6 +22,16 @@ const LANGUAGES = [
   { code: "en", name: "English" },
 ];
 
+function useIsMobile(breakpoint = 640) {
+  const [m, setM] = useState(() => window.innerWidth < breakpoint);
+  useEffect(() => {
+    const fn = () => setM(window.innerWidth < breakpoint);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, [breakpoint]);
+  return m;
+}
+
 // ─────────────────────────────────────────────
 export function Conversation() {
   const ws = useRef<WebSocket | null>(null);
@@ -31,6 +41,9 @@ export function Conversation() {
   const [confirmedOrder, setConfirmedOrder] = useState<OrderConfirmed | null>(null);
   const [status, setStatus]                 = useState<CallStatus>("idle");
   const [error, setError]                   = useState<string | null>(null);
+
+  const isMobile = useIsMobile();
+  const [mobilePanelTab, setMobilePanelTab] = useState<"sierra" | "order">("sierra");
 
   const { startMicrophoneStream, cleanupMicrophoneStream } = useMicrophone({
     onData: (d) => ws.current?.send(d),
@@ -82,49 +95,92 @@ export function Conversation() {
 
   useEffect(() => () => stop(), []); // eslint-disable-line
 
+  // On mobile, auto-switch to Sierra panel when call becomes active
+  useEffect(() => {
+    if (isMobile && status !== "idle") setMobilePanelTab("sierra");
+  }, [isMobile, status !== "idle"]); // eslint-disable-line
+
   const isActive = status !== "idle";
 
   return (
     <div className="h-full flex flex-col relative" style={{ background: "var(--bg)" }}>
 
-      {/* ── Three-column main area ─────────────────────────────────────── */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
-
-        {/* ① Sierra — avatar + status */}
+      {/* ── Mobile panel tab bar ───────────────────────────────────────── */}
+      {isMobile && (
         <div
-          className="flex-none border-r"
-          style={{ width: 260, borderColor: "var(--border)", background: "var(--bg)" }}
+          className="flex-none flex border-b"
+          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
         >
-          <AvatarPanel callStatus={status} />
+          <PanelTab
+            active={mobilePanelTab === "sierra"}
+            onClick={() => setMobilePanelTab("sierra")}
+          >
+            Sierra
+          </PanelTab>
+          <PanelTab
+            active={mobilePanelTab === "order"}
+            onClick={() => setMobilePanelTab("order")}
+          >
+            My Order
+          </PanelTab>
         </div>
+      )}
 
-        {/* ② Menu */}
-        <div
-          className="flex flex-col border-r overflow-hidden"
-          style={{ flex: "0 0 32%", borderColor: "var(--border)" }}
-        >
-          <MenuPanel />
+      {/* ── Content ───────────────────────────────────────────────────── */}
+      {isMobile ? (
+        // Mobile: single panel view
+        <div className="flex-1 overflow-hidden min-h-0">
+          {mobilePanelTab === "sierra" && (
+            <AvatarPanel callStatus={status} />
+          )}
+          {mobilePanelTab === "order" && (
+            <OrderColumn
+              messages={messages}
+              confirmedOrder={confirmedOrder}
+              isActive={isActive}
+            />
+          )}
         </div>
+      ) : (
+        // Desktop: three-column layout
+        <div className="flex-1 flex overflow-hidden min-h-0">
 
-        {/* ③ Order */}
-        <div className="flex flex-col overflow-hidden" style={{ flex: 1 }}>
-          <OrderColumn
-            messages={messages}
-            confirmedOrder={confirmedOrder}
-            isActive={isActive}
-          />
+          {/* ① Sierra — avatar + status */}
+          <div
+            className="flex-none border-r"
+            style={{ width: 260, borderColor: "var(--border)", background: "var(--bg)" }}
+          >
+            <AvatarPanel callStatus={status} />
+          </div>
+
+          {/* ② Menu */}
+          <div
+            className="flex flex-col border-r overflow-hidden"
+            style={{ flex: "0 0 32%", borderColor: "var(--border)" }}
+          >
+            <MenuPanel />
+          </div>
+
+          {/* ③ Order */}
+          <div className="flex flex-col overflow-hidden" style={{ flex: 1 }}>
+            <OrderColumn
+              messages={messages}
+              confirmedOrder={confirmedOrder}
+              isActive={isActive}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Bottom controls ────────────────────────────────────────────── */}
       <div
         className="flex-none border-t"
         style={{ borderColor: "var(--border)", background: "var(--surface)" }}
       >
-        {/* Error strip — only shown when there's a problem */}
+        {/* Error strip */}
         {error && (
           <div
-            className="flex items-center gap-2 px-5 py-2 text-xs border-b"
+            className="flex items-center gap-2 px-4 py-2 text-xs border-b"
             style={{
               background: "rgba(239,68,68,0.08)",
               borderColor: "rgba(239,68,68,0.15)",
@@ -137,7 +193,7 @@ export function Conversation() {
         )}
 
         {/* Controls row */}
-        <div className="flex items-center gap-3 px-5 py-3">
+        <div className="flex items-center gap-3 px-4 py-3">
           <select
             disabled={isActive}
             value={lang}
@@ -159,8 +215,12 @@ export function Conversation() {
           {isActive ? (
             <button
               onClick={stop}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold text-white transition-all"
-              style={{ background: "#dc2626", boxShadow: "0 2px 12px rgba(220,38,38,0.3)" }}
+              className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold text-white transition-all"
+              style={{
+                background: "#dc2626",
+                boxShadow: "0 2px 12px rgba(220,38,38,0.3)",
+                minHeight: 44,
+              }}
             >
               <span
                 style={{ width: 8, height: 8, borderRadius: "50%", background: "white", display: "inline-block" }}
@@ -173,8 +233,12 @@ export function Conversation() {
           ) : (
             <button
               onClick={startCall}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-semibold text-black transition-all hover:opacity-90 active:scale-95"
-              style={{ background: "var(--accent)", boxShadow: "0 2px 16px rgba(245,158,11,0.3)" }}
+              className="flex items-center gap-2 px-6 py-3 rounded-full text-sm font-semibold text-black transition-all hover:opacity-90 active:scale-95"
+              style={{
+                background: "var(--accent)",
+                boxShadow: "0 2px 16px rgba(245,158,11,0.3)",
+                minHeight: 44,
+              }}
             >
               <MicSvg size={14} /> Start call
             </button>
@@ -182,9 +246,32 @@ export function Conversation() {
         </div>
       </div>
 
-      {/* ── Sierra floating status bubble ──────────────────────────────── */}
-      <SierraFloat status={status} />
+      {/* ── Sierra floating status bubble — desktop only ───────────────── */}
+      {!isMobile && <SierraFloat status={status} />}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Mobile panel tab
+// ─────────────────────────────────────────────
+function PanelTab({
+  active, onClick, children,
+}: {
+  active: boolean; onClick: () => void; children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex-1 py-2.5 text-xs font-semibold border-b-2 transition-colors"
+      style={{
+        borderColor: active ? "var(--accent)" : "transparent",
+        color: active ? "var(--accent)" : "var(--text-dim)",
+        background: "transparent",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -385,7 +472,7 @@ function DetailRow({
 }
 
 // ─────────────────────────────────────────────
-// Sierra floating status bubble
+// Sierra floating status bubble — desktop only
 // ─────────────────────────────────────────────
 function SierraFloat({ status }: { status: CallStatus }) {
   const speaking  = status === "speaking";

@@ -85,8 +85,18 @@ function cartReducer(state: CartEntry[], action: CartAction): CartEntry[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Constants
+// Hooks & helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+function useIsMobile(breakpoint = 640) {
+  const [m, setM] = useState(() => window.innerWidth < breakpoint);
+  useEffect(() => {
+    const fn = () => setM(window.innerWidth < breakpoint);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, [breakpoint]);
+  return m;
+}
 
 const STORE_API: string = import.meta.env.VITE_STORE_API_URL ?? "/store-api";
 
@@ -169,8 +179,10 @@ export function Store() {
   const [selectedItem,   setSelectedItem]   = useState<StoreItem | null>(null);
   const [showCheckout,   setShowCheckout]   = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<{ order_id: string; total: number } | null>(null);
+  const [showCart,       setShowCart]       = useState(false);
 
   const [cart, dispatch] = useReducer(cartReducer, []);
+  const isMobile = useIsMobile();
 
   useEffect(() => { loadMenu(); }, []);
 
@@ -239,7 +251,7 @@ export function Store() {
 
         {/* Top bar */}
         <div
-          className="flex-none px-5 pt-4 pb-3 border-b"
+          className="flex-none px-4 pt-3 pb-3 border-b"
           style={{ borderColor: "var(--border)", background: "var(--surface)" }}
         >
           {/* Search */}
@@ -252,7 +264,7 @@ export function Store() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search menu…"
-              className="w-full pl-9 pr-9 py-2 rounded-xl text-sm outline-none transition-colors"
+              className="w-full pl-9 pr-9 py-2.5 rounded-xl text-sm outline-none transition-colors"
               style={{
                 background: "var(--surface-raised)",
                 border: "1px solid var(--border)",
@@ -289,7 +301,7 @@ export function Store() {
 
         {/* Section label */}
         {!loading && (
-          <div className="flex-none flex items-baseline gap-2 px-5 pt-3 pb-1">
+          <div className="flex-none flex items-baseline gap-2 px-4 pt-3 pb-1">
             <span
               className="text-xs font-semibold uppercase tracking-widest"
               style={{ color: "var(--text-dim)" }}
@@ -306,21 +318,29 @@ export function Store() {
           </div>
         )}
 
-        {/* Grid */}
-        <div className="flex-1 overflow-y-auto px-5 pt-2 pb-6">
+        {/* Grid — 2 cols on mobile, auto-fill on desktop */}
+        <div
+          className="flex-1 overflow-y-auto px-4 pt-2 pb-6"
+          style={{ paddingBottom: isMobile ? 88 : 24 }}
+        >
           {loading ? (
-            <SkeletonGrid />
+            <SkeletonGrid isMobile={isMobile} />
           ) : filtered.length === 0 ? (
             <EmptyState query={search} />
           ) : (
             <div
               className="grid gap-3"
-              style={{ gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))" }}
+              style={{
+                gridTemplateColumns: isMobile
+                  ? "repeat(2, 1fr)"
+                  : "repeat(auto-fill,minmax(200px,1fr))",
+              }}
             >
               {filtered.map(item => (
                 <ItemCard
                   key={item.id}
                   item={item}
+                  isMobile={isMobile}
                   onOpen={() => setSelectedItem(item)}
                   onAdd={() => {
                     if (item.modifier_groups.length > 0) setSelectedItem(item);
@@ -333,19 +353,60 @@ export function Store() {
         </div>
       </div>
 
-      {/* ── Cart sidebar ──────────────────────────────────────── */}
-      <CartSidebar
-        cart={cart}
-        count={cartCount}
-        total={cartTotal}
-        dispatch={dispatch}
-        onCheckout={() => setShowCheckout(true)}
-      />
+      {/* ── Cart sidebar — desktop only ───────────────────────── */}
+      {!isMobile && (
+        <CartSidebar
+          cart={cart}
+          count={cartCount}
+          total={cartTotal}
+          dispatch={dispatch}
+          onCheckout={() => setShowCheckout(true)}
+        />
+      )}
+
+      {/* ── Mobile cart FAB ───────────────────────────────────── */}
+      {isMobile && (
+        <button
+          onClick={() => setShowCart(true)}
+          className="fixed flex items-center gap-2 rounded-full transition-all active:scale-95"
+          style={{
+            bottom: 80,
+            right: 16,
+            zIndex: 30,
+            padding: "12px 18px",
+            background: "var(--accent)",
+            color: "#000",
+            boxShadow: "0 4px 24px rgba(245,158,11,0.45)",
+            fontWeight: 700,
+            fontSize: 14,
+          }}
+        >
+          <CartIcon color="#000" />
+          <span>
+            {cartCount > 0
+              ? `${cartCount} item${cartCount > 1 ? "s" : ""} · ${cad(cartTotal)}`
+              : "Cart"}
+          </span>
+        </button>
+      )}
+
+      {/* ── Mobile cart bottom sheet ──────────────────────────── */}
+      {isMobile && showCart && (
+        <MobileCartSheet
+          cart={cart}
+          count={cartCount}
+          total={cartTotal}
+          dispatch={dispatch}
+          onClose={() => setShowCart(false)}
+          onCheckout={() => { setShowCart(false); setShowCheckout(true); }}
+        />
+      )}
 
       {/* ── Modals ────────────────────────────────────────────── */}
       {selectedItem && (
         <ItemModal
           item={selectedItem}
+          isMobile={isMobile}
           onClose={() => setSelectedItem(null)}
           onAdd={entry => { dispatch({ type: "ADD", entry }); setSelectedItem(null); }}
         />
@@ -355,6 +416,7 @@ export function Store() {
         <CheckoutModal
           cart={cart}
           total={cartTotal}
+          isMobile={isMobile}
           onClose={() => setShowCheckout(false)}
           onConfirmed={order => {
             setConfirmedOrder(order);
@@ -366,6 +428,7 @@ export function Store() {
       {confirmedOrder && (
         <SuccessOverlay
           order={confirmedOrder}
+          isMobile={isMobile}
           onDone={() => { setConfirmedOrder(null); setShowCheckout(false); }}
         />
       )}
@@ -406,9 +469,9 @@ function Pill({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ItemCard({
-  item, onOpen, onAdd,
+  item, onOpen, onAdd, isMobile,
 }: {
-  item: StoreItem; onOpen: () => void; onAdd: () => void;
+  item: StoreItem; onOpen: () => void; onAdd: () => void; isMobile: boolean;
 }) {
   const theme = catTheme(item.category_id);
   const [flash, setFlash] = useState(false);
@@ -420,6 +483,8 @@ function ItemCard({
     onAdd();
     setTimeout(() => setFlash(false), 700);
   }
+
+  const thumbHeight = isMobile ? 90 : 108;
 
   return (
     <div
@@ -444,13 +509,13 @@ function ItemCard({
       {/* Thumbnail */}
       <div
         className="flex-none relative flex items-center justify-center overflow-hidden"
-        style={{ height: 108, background: theme.grad }}
+        style={{ height: thumbHeight, background: theme.grad }}
       >
         <FoodImage
           src={getItemImage(item.name, item.image_url)}
           alt={item.name}
           emoji={theme.emoji}
-          emojiSize={48}
+          emojiSize={isMobile ? 36 : 48}
         />
         {item.available === false && (
           <div
@@ -468,12 +533,15 @@ function ItemCard({
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col px-3 pt-2.5 pb-3">
-        <p className="text-sm font-semibold leading-snug" style={{ color: "var(--text)" }}>
+      <div className="flex-1 flex flex-col px-2.5 pt-2 pb-2.5">
+        <p
+          className="font-semibold leading-snug"
+          style={{ color: "var(--text)", fontSize: isMobile ? 12 : 14 }}
+        >
           {item.name}
         </p>
 
-        {item.description && (
+        {!isMobile && item.description && (
           <p
             className="text-xs mt-0.5 leading-relaxed"
             style={{
@@ -488,29 +556,33 @@ function ItemCard({
           </p>
         )}
 
-        {item.modifier_groups.length > 0 && (
+        {!isMobile && item.modifier_groups.length > 0 && (
           <p className="text-xs mt-1" style={{ color: "var(--text-dim)" }}>
             Customizable ›
           </p>
         )}
 
         {/* Price + Add */}
-        <div className="flex items-center justify-between mt-auto pt-2.5">
-          <span className="text-sm font-bold" style={{ color: theme.accent }}>
+        <div className="flex items-center justify-between mt-auto pt-2">
+          <span
+            className="font-bold"
+            style={{ color: theme.accent, fontSize: isMobile ? 12 : 14 }}
+          >
             {item.price_display}
           </span>
           <button
             onClick={handleAdd}
             disabled={item.available === false}
-            className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition-all duration-150 active:scale-95 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition-all duration-150 active:scale-95 disabled:cursor-not-allowed"
             style={{
+              fontSize: isMobile ? 11 : 12,
               background: item.available === false ? "var(--surface-raised)" : flash ? "#22c55e" : "var(--accent)",
               color: item.available === false ? "var(--text-dim)" : "#000",
-              minWidth: 52,
+              minWidth: isMobile ? 44 : 52,
               justifyContent: "center",
             }}
           >
-            {item.available === false ? "Sold Out" : flash ? "✓" : "+ Add"}
+            {item.available === false ? "Out" : flash ? "✓" : "+ Add"}
           </button>
         </div>
       </div>
@@ -519,7 +591,7 @@ function ItemCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cart sidebar
+// Cart sidebar — desktop
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CartSidebar({
@@ -619,6 +691,135 @@ function CartSidebar({
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Mobile cart bottom sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+function MobileCartSheet({
+  cart, count, total, dispatch, onClose, onCheckout,
+}: {
+  cart: CartEntry[];
+  count: number;
+  total: number;
+  dispatch: React.Dispatch<CartAction>;
+  onClose: () => void;
+  onCheckout: () => void;
+}) {
+  const gst   = Math.round(total * 0.05);
+  const grand = total + gst;
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50"
+      style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+      onClick={onClose}
+    >
+      <div
+        className="absolute bottom-0 inset-x-0 flex flex-col rounded-t-2xl overflow-hidden"
+        style={{
+          background: "var(--surface)",
+          maxHeight: "82vh",
+          borderTop: "1px solid var(--border)",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Drag handle */}
+        <div className="flex-none flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full" style={{ background: "var(--border)" }} />
+        </div>
+
+        {/* Header */}
+        <div
+          className="flex-none flex items-center justify-between px-4 py-2.5 border-b"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div className="flex items-center gap-2">
+            <CartIcon />
+            <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+              Your Cart
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {count > 0 && (
+              <span
+                className="text-xs px-2 py-0.5 rounded-full font-bold"
+                style={{ background: "var(--accent)", color: "#000" }}
+              >
+                {count}
+              </span>
+            )}
+            <button
+              onClick={onClose}
+              className="text-sm w-7 h-7 flex items-center justify-center rounded-full"
+              style={{ color: "var(--text-dim)", background: "var(--surface-raised)" }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Items */}
+        <div className="flex-1 overflow-y-auto">
+          {cart.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3 select-none">
+              <span style={{ fontSize: 48 }}>🛒</span>
+              <p className="text-sm font-medium" style={{ color: "var(--text-dim)" }}>
+                Your cart is empty
+              </p>
+              <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+                Go back and add some items
+              </p>
+            </div>
+          ) : (
+            <div className="px-3 py-2 flex flex-col gap-2">
+              {cart.map(entry => (
+                <CartRow key={entry.key} entry={entry} dispatch={dispatch} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Totals + CTA */}
+        {cart.length > 0 && (
+          <div className="flex-none border-t" style={{ borderColor: "var(--border)" }}>
+            <div className="px-4 py-3 flex flex-col gap-1.5">
+              <PriceRow label="Subtotal" value={total} />
+              <PriceRow label="GST (5%)" value={gst} />
+              <div
+                className="flex items-center justify-between pt-2.5 mt-1 border-t"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <span className="text-sm font-bold" style={{ color: "var(--text)" }}>Total</span>
+                <span className="text-base font-black" style={{ color: "var(--accent)" }}>
+                  {cad(grand)}
+                </span>
+              </div>
+            </div>
+            <div className="px-4 pb-8">
+              <button
+                onClick={onCheckout}
+                className="w-full py-4 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90 active:scale-[.98]"
+                style={{
+                  background: "var(--accent)",
+                  boxShadow: "0 2px 16px rgba(245,158,11,0.3)",
+                }}
+              >
+                Place Order →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CartRow({ entry, dispatch }: { entry: CartEntry; dispatch: React.Dispatch<CartAction> }) {
   const theme     = catTheme(entry.item.category_id);
   const unitPrice = entry.item.price + entry.modifier_extra;
@@ -651,7 +852,7 @@ function CartRow({ entry, dispatch }: { entry: CartEntry; dispatch: React.Dispat
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => dispatch({ type: "DECREMENT", key: entry.key })}
-              className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
+              className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold"
               style={{ background: "var(--border)", color: "var(--text-muted)" }}
             >
               −
@@ -661,7 +862,7 @@ function CartRow({ entry, dispatch }: { entry: CartEntry; dispatch: React.Dispat
             </span>
             <button
               onClick={() => dispatch({ type: "INCREMENT", key: entry.key })}
-              className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
+              className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold"
               style={{ background: "var(--accent)", color: "#000" }}
             >
               +
@@ -700,11 +901,12 @@ function PriceRow({ label, value }: { label: string; value: number }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ItemModal({
-  item, onClose, onAdd,
+  item, onClose, onAdd, isMobile,
 }: {
   item: StoreItem;
   onClose: () => void;
   onAdd: (entry: CartEntry) => void;
+  isMobile: boolean;
 }) {
   const theme = catTheme(item.category_id);
 
@@ -724,10 +926,8 @@ function ItemModal({
     setSelectedMods(prev => {
       const cur = prev[group.id] ?? [];
       if (group.max_allowed === 1) {
-        // Radio: toggle selection
         return { ...prev, [group.id]: cur.some(m => m.id === mod.id) ? [] : [mod] };
       }
-      // Checkbox: add or remove
       const has = cur.some(m => m.id === mod.id);
       const next = has
         ? cur.filter(m => m.id !== mod.id)
@@ -748,32 +948,46 @@ function ItemModal({
     });
   }
 
+  const panelStyle: React.CSSProperties = isMobile
+    ? {
+        width: "100%",
+        height: "100%",
+        borderRadius: 0,
+        background: "var(--surface)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }
+    : {
+        width: 440,
+        maxWidth: "100%",
+        maxHeight: "86vh",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 16,
+        boxShadow: "0 24px 80px rgba(0,0,0,0.75)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      };
+
   return (
-    <Overlay onClose={onClose}>
-      <div
-        className="relative flex flex-col rounded-2xl overflow-hidden"
-        style={{
-          width: 440, maxHeight: "86vh",
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          boxShadow: "0 24px 80px rgba(0,0,0,0.75)",
-        }}
-        onClick={e => e.stopPropagation()}
-      >
+    <Overlay onClose={onClose} isMobile={isMobile}>
+      <div style={panelStyle} onClick={e => e.stopPropagation()}>
         {/* Hero */}
         <div
           className="flex-none relative flex items-center justify-center overflow-hidden"
-          style={{ height: 140, background: theme.grad }}
+          style={{ height: isMobile ? 160 : 140, background: theme.grad }}
         >
           <FoodImage
             src={getItemImage(item.name, item.image_url)}
             alt={item.name}
             emoji={theme.emoji}
-            emojiSize={72}
+            emojiSize={isMobile ? 80 : 72}
           />
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 w-7 h-7 rounded-full flex items-center justify-center text-xs"
+            className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-xs"
             style={{ background: "rgba(0,0,0,0.45)", color: "#fff" }}
           >
             ✕
@@ -836,14 +1050,13 @@ function ItemModal({
                       <button
                         key={mod.id}
                         onClick={() => toggleMod(group, mod)}
-                        className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-all"
+                        className="flex items-center justify-between px-3 py-3 rounded-xl text-sm transition-all"
                         style={{
                           background: isSel ? `${theme.accent}18` : "var(--surface-raised)",
                           border: `1px solid ${isSel ? theme.accent : "var(--border)"}`,
                         }}
                       >
                         <div className="flex items-center gap-2.5">
-                          {/* Radio / checkbox indicator */}
                           <span
                             className="w-4 h-4 flex-none flex items-center justify-center"
                             style={{
@@ -884,7 +1097,7 @@ function ItemModal({
           >
             <button
               onClick={() => setQty(q => Math.max(1, q - 1))}
-              className="w-6 h-6 rounded-lg flex items-center justify-center font-bold text-sm"
+              className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm"
               style={{ background: "var(--border)", color: "var(--text-muted)" }}
             >
               −
@@ -894,7 +1107,7 @@ function ItemModal({
             </span>
             <button
               onClick={() => setQty(q => q + 1)}
-              className="w-6 h-6 rounded-lg flex items-center justify-center font-bold text-sm"
+              className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm"
               style={{ background: "var(--accent)", color: "#000" }}
             >
               +
@@ -905,7 +1118,7 @@ function ItemModal({
           <button
             onClick={handleAdd}
             disabled={!requiredMet || item.available === false}
-            className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-[.98] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 py-3 rounded-xl text-sm font-bold transition-all active:scale-[.98] disabled:opacity-40 disabled:cursor-not-allowed"
             style={{
               background: (requiredMet && item.available !== false) ? "var(--accent)" : "var(--surface-raised)",
               color: (requiredMet && item.available !== false) ? "#000" : "var(--text-dim)",
@@ -925,12 +1138,13 @@ function ItemModal({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CheckoutModal({
-  cart, total, onClose, onConfirmed,
+  cart, total, onClose, onConfirmed, isMobile,
 }: {
   cart: CartEntry[];
   total: number;
   onClose: () => void;
   onConfirmed: (order: { order_id: string; total: number }) => void;
+  isMobile: boolean;
 }) {
   const gst   = Math.round(total * 0.05);
   const grand = total + gst;
@@ -977,18 +1191,32 @@ function CheckoutModal({
     }
   }
 
+  const panelStyle: React.CSSProperties = isMobile
+    ? {
+        width: "100%",
+        height: "100%",
+        borderRadius: 0,
+        background: "var(--surface)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }
+    : {
+        width: 480,
+        maxWidth: "100%",
+        maxHeight: "90vh",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 16,
+        boxShadow: "0 24px 80px rgba(0,0,0,0.75)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      };
+
   return (
-    <Overlay onClose={onClose}>
-      <div
-        className="relative flex flex-col rounded-2xl overflow-hidden"
-        style={{
-          width: 480, maxHeight: "90vh",
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          boxShadow: "0 24px 80px rgba(0,0,0,0.75)",
-        }}
-        onClick={e => e.stopPropagation()}
-      >
+    <Overlay onClose={onClose} isMobile={isMobile}>
+      <div style={panelStyle} onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div
           className="flex-none flex items-center justify-between px-5 py-4 border-b"
@@ -1000,7 +1228,13 @@ function CheckoutModal({
               Parkash Sweets · Edmonton, AB
             </p>
           </div>
-          <button onClick={onClose} style={{ color: "var(--text-dim)" }} className="text-sm">✕</button>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-full flex items-center justify-center text-sm"
+            style={{ color: "var(--text-dim)", background: "var(--surface-raised)" }}
+          >
+            ✕
+          </button>
         </div>
 
         {/* Body */}
@@ -1014,7 +1248,7 @@ function CheckoutModal({
                 <button
                   key={t}
                   onClick={() => setOrderType(t)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
+                  className="flex-1 py-3 rounded-xl text-sm font-medium transition-all"
                   style={
                     orderType === t
                       ? { background: "var(--accent)", color: "#000" }
@@ -1039,7 +1273,7 @@ function CheckoutModal({
               placeholder="e.g. Harpreet Singh"
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full mt-2 px-4 py-2.5 rounded-xl text-sm outline-none transition-colors"
+              className="w-full mt-2 px-4 py-3 rounded-xl text-sm outline-none transition-colors"
               style={{
                 background: "var(--surface-raised)",
                 border: `1px solid ${name.trim() ? "var(--accent)" : "var(--border)"}`,
@@ -1056,7 +1290,7 @@ function CheckoutModal({
               placeholder="780-555-0100"
               value={phone}
               onChange={e => setPhone(e.target.value)}
-              className="w-full mt-2 px-4 py-2.5 rounded-xl text-sm outline-none"
+              className="w-full mt-2 px-4 py-3 rounded-xl text-sm outline-none"
               style={{
                 background: "var(--surface-raised)",
                 border: "1px solid var(--border)",
@@ -1073,7 +1307,7 @@ function CheckoutModal({
               value={note}
               onChange={e => setNote(e.target.value)}
               rows={2}
-              className="w-full mt-2 px-4 py-2.5 rounded-xl text-sm outline-none resize-none"
+              className="w-full mt-2 px-4 py-3 rounded-xl text-sm outline-none resize-none"
               style={{
                 background: "var(--surface-raised)",
                 border: "1px solid var(--border)",
@@ -1087,10 +1321,7 @@ function CheckoutModal({
             className="rounded-xl overflow-hidden"
             style={{ border: "1px solid var(--border)", background: "var(--surface-raised)" }}
           >
-            <div
-              className="px-4 py-2 border-b"
-              style={{ borderColor: "var(--border)" }}
-            >
+            <div className="px-4 py-2 border-b" style={{ borderColor: "var(--border)" }}>
               <span
                 className="text-xs font-semibold uppercase tracking-wide"
                 style={{ color: "var(--text-dim)" }}
@@ -1115,10 +1346,7 @@ function CheckoutModal({
                 </div>
               ))}
 
-              <div
-                className="flex flex-col gap-1 border-t pt-2 mt-1"
-                style={{ borderColor: "var(--border)" }}
-              >
+              <div className="flex flex-col gap-1 border-t pt-2 mt-1" style={{ borderColor: "var(--border)" }}>
                 <div className="flex justify-between text-xs">
                   <span style={{ color: "var(--text-muted)" }}>Subtotal</span>
                   <span style={{ color: "var(--text)" }}>{cad(total)}</span>
@@ -1161,7 +1389,7 @@ function CheckoutModal({
           <button
             onClick={confirm}
             disabled={loading || !name.trim()}
-            className="w-full py-3 rounded-xl text-sm font-bold text-black transition-all active:scale-[.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-black transition-all active:scale-[.98] disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
               background: "var(--accent)",
               boxShadow: "0 2px 16px rgba(245,158,11,0.3)",
@@ -1180,38 +1408,43 @@ function CheckoutModal({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SuccessOverlay({
-  order, onDone,
+  order, onDone, isMobile,
 }: {
   order: { order_id: string; total: number };
   onDone: () => void;
+  isMobile: boolean;
 }) {
   return (
-    <Overlay onClose={onDone}>
+    <Overlay onClose={onDone} isMobile={isMobile}>
       <div
         className="flex flex-col items-center text-center rounded-2xl px-8 py-10"
         style={{
-          width: 360,
+          width: isMobile ? "100%" : 360,
+          maxWidth: "100%",
           background: "var(--surface)",
-          border: "1px solid var(--border)",
-          boxShadow: "0 24px 80px rgba(0,0,0,0.75)",
+          border: isMobile ? "none" : "1px solid var(--border)",
+          borderRadius: isMobile ? 0 : 16,
+          boxShadow: isMobile ? "none" : "0 24px 80px rgba(0,0,0,0.75)",
+          height: isMobile ? "100%" : "auto",
+          justifyContent: isMobile ? "center" : undefined,
         }}
         onClick={e => e.stopPropagation()}
       >
         {/* Check circle */}
         <div
-          className="w-20 h-20 rounded-full flex items-center justify-center mb-5"
+          className="w-24 h-24 rounded-full flex items-center justify-center mb-5"
           style={{
             background: "rgba(34,197,94,0.12)",
             border: "2px solid rgba(34,197,94,0.3)",
           }}
         >
-          <span style={{ fontSize: 40 }}>✅</span>
+          <span style={{ fontSize: 48 }}>✅</span>
         </div>
 
-        <h2 className="text-xl font-black mb-1" style={{ color: "var(--text)" }}>
+        <h2 className="text-2xl font-black mb-1" style={{ color: "var(--text)" }}>
           Order Placed!
         </h2>
-        <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+        <p className="text-sm mb-8" style={{ color: "var(--text-muted)" }}>
           Your order is confirmed at Parkash Sweets.
         </p>
 
@@ -1243,7 +1476,7 @@ function SuccessOverlay({
 
         <button
           onClick={onDone}
-          className="w-full py-3 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90 active:scale-[.98]"
+          className="w-full py-4 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90 active:scale-[.98]"
           style={{ background: "var(--accent)" }}
         >
           Back to Menu
@@ -1254,10 +1487,16 @@ function SuccessOverlay({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared overlay wrapper
+// Shared overlay wrapper — fixed inset-0 for reliable full-viewport coverage
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+function Overlay({
+  children, onClose, isMobile,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+  isMobile: boolean;
+}) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", handler);
@@ -1266,7 +1505,7 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
 
   return (
     <div
-      className="absolute inset-0 flex items-center justify-center z-50 p-4"
+      className={`fixed inset-0 z-50 flex ${isMobile ? "items-stretch p-0" : "items-center justify-center p-4"}`}
       style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)" }}
       onClick={onClose}
     >
@@ -1327,18 +1566,22 @@ function FoodImage({
   );
 }
 
-function SkeletonGrid() {
+function SkeletonGrid({ isMobile }: { isMobile: boolean }) {
   return (
     <div
       className="grid gap-3"
-      style={{ gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))" }}
+      style={{
+        gridTemplateColumns: isMobile
+          ? "repeat(2, 1fr)"
+          : "repeat(auto-fill,minmax(200px,1fr))",
+      }}
     >
       {Array.from({ length: 12 }).map((_, i) => (
         <div
           key={i}
           className="rounded-2xl overflow-hidden animate-pulse"
           style={{
-            height: 196,
+            height: isMobile ? 160 : 196,
             background: "var(--surface)",
             border: "1px solid var(--border)",
           }}
@@ -1376,10 +1619,10 @@ function SearchIcon() {
   );
 }
 
-function CartIcon() {
+function CartIcon({ color = "var(--text-muted)" }: { color?: string }) {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-      stroke="var(--text-muted)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
       <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
     </svg>
