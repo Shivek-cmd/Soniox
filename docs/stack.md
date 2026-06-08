@@ -1,12 +1,13 @@
 # Tech Stack Decision
 
 ## What We're Building
-A restaurant voice agent for Parkash Sweets that:
-- Answers incoming phone calls (Twilio) and browser sessions (React frontend)
+A restaurant voice agent and e-commerce store for Parkash Sweets that:
+- Answers incoming phone calls (Twilio) and browser sessions (React frontend — "Order with Sierra" tab)
 - Understands Punjabi, Hindi, and English in the same call
 - Takes food orders from customers using live menu data from Clover POS
 - Creates real orders in the Clover POS dashboard
 - Confirms the order back to the customer via TTS
+- Serves a full e-commerce "Browse Store" tab: category grid, search, cart, modifier selection, checkout → Clover order
 
 ---
 
@@ -23,8 +24,9 @@ A restaurant voice agent for Parkash Sweets that:
 | POS | **Clover** | Live menu sync + real order creation in restaurant's POS system |
 | Voice bot server | **Python + websockets** | Port 8765 — runs the 4-processor pipeline + Clover client |
 | Twilio bridge | **Python + FastAPI** | Port 5050 — Twilio phone bridge + Clover webhook relay |
-| Frontend | **React (Vite)** | Served via nginx — browser UI for testing without a phone |
-| Reverse proxy | **Caddy** | Ports 80/443 — HTTPS, path-based routing to all services |
+| Store API | **Python + FastAPI** | Port 8766 — e-commerce REST API (menu + order creation via Clover) |
+| Frontend | **React (Vite)** | Served via nginx — two tabs: AI ordering + Browse Store |
+| Reverse proxy | **Caddy** | Ports 80/443 — HTTPS, path-based routing to all 5 services |
 | Dev tunneling | **ngrok** | Exposes local server to Twilio during development |
 
 ---
@@ -59,8 +61,18 @@ soniox_examples/apps/soniox-voice-bot-demo/   ← base project
 ├── twilio/                    ← phone call bridge (Python, port 5050)
 │   ├── main.py                ← ✅ EDITED: /clover-webhook endpoint added
 │   └── .env                   ← local dev only (Docker uses env from docker-compose.yml)
-└── frontend/                  ← browser test UI (React + Vite, served by nginx)
-    └── (don't touch — VITE_SONIOX_VOICE_BOT_WS_URL baked in at build time)
+├── store-api/                 ← ✅ NEW: e-commerce REST API (Python + FastAPI, port 8766)
+│   ├── main.py                ← GET /menu, POST /orders, GET /orders/{id}, GET /health
+│   ├── requirements.txt       ← fastapi, uvicorn, httpx, pydantic, structlog
+│   └── Dockerfile             ← python:3.13-slim, port 8766
+└── frontend/                  ← browser UI (React + Vite, served by nginx, port 80)
+    ├── src/
+    │   ├── App.tsx             ← ✅ EDITED: tab switcher ("Order with Sierra" / "Browse Store")
+    │   ├── components/
+    │   │   ├── conversation.tsx ← ✅ EDITED: removed chat panel, 3-column layout
+    │   │   └── Store.tsx       ← ✅ NEW: full e-commerce store UI (~600 lines)
+    │   └── vite-env.d.ts      ← ✅ EDITED: added VITE_STORE_API_URL type
+    └── vite.config.ts         ← ✅ EDITED: proxy /store-api → localhost:8766 (local dev)
 ```
 
 ---
@@ -93,7 +105,16 @@ audioop-lts>=0.2.2   # audio format conversion (mulaw ↔ PCM), Python 3.13 comp
 httpx                # internal HTTP calls to voice-server (/internal/clover-reload)
 ```
 
-**Install with uv** (not pip) — run `uv sync` inside each folder separately.
+### store-api/
+```
+fastapi>=0.116.1     # REST API
+uvicorn[standard]>=0.34.0  # run FastAPI
+httpx>=0.28.1        # async HTTP client for Clover API calls
+pydantic>=2.11.7     # request/response models
+structlog>=25.3.0    # structured logging
+```
+
+**Install with uv** (not pip) — run `uv sync` inside `server/` and `twilio/`. For `store-api/`, use `pip install -r requirements.txt` (uses requirements.txt, not pyproject.toml).
 
 ---
 
@@ -112,7 +133,15 @@ httpx                # internal HTTP calls to voice-server (/internal/clover-rel
    - `tools.py`: get_menu/check_availability/place_order use Clover as source of truth
    - `main.py`: DynamicTTSProcessor (lazy connect, idle reconnect, dead stream recovery)
    - `twilio/main.py`: /clover-webhook endpoint for inventory change events
-9. Deploy to server (Docker — 4 services: voice-server, twilio-bridge, frontend, caddy)
+9. **Browse Store e-commerce tab** — Parkash Store with Clover backend
+   - `store-api/main.py`: FastAPI on 8766, GET /menu + POST /orders via Clover REST
+   - `frontend/src/components/Store.tsx`: full store UI (category filter, search, cart, modal, checkout)
+   - `frontend/src/App.tsx`: tab switcher between AI ordering and Browse Store
+   - `conversation.tsx`: removed transcript panel, now 3-column layout
+   - Docker: 5th service (store-api), Caddy routes `/store-api/*` to it
+10. Deploy to server (Docker — 5 services: voice-server, twilio-bridge, store-api, frontend, caddy)
+    - **Pending:** switch store-api `CLOVER_BASE_URL` from sandbox to production when Clover production access is purchased
+    - **Pending:** add Clover Hosted Checkout (redirect-based payment) after production access
 
 ---
 

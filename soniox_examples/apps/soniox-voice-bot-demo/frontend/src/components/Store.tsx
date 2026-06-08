@@ -124,6 +124,36 @@ function cad(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// ── Item image map ─────────────────────────────────────────────────────────────
+// "bread pakora" listed before "pakora" so the longer key wins first.
+const ITEM_IMAGES: { keys: string[]; url: string }[] = [
+  { keys: ["bread pakora"],                              url: "https://images.unsplash.com/photo-1574484284002-952d92456975?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["samosa"],                                    url: "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["pakora", "bhajia", "bhaji"],                 url: "https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["pani puri", "bhel", "chaat", "dahi puri"],  url: "https://images.unsplash.com/photo-1567337710282-00832b415979?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["parantha", "paratha", "roti", "naan"],       url: "https://images.unsplash.com/photo-1600609500046-0ac3c4be1dd7?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["gulab jamun"],                               url: "https://images.unsplash.com/photo-1571167530149-c1105da4c2c7?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["jalebi"],                                    url: "https://images.unsplash.com/photo-1590123710338-8eecc2b2dd73?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["barfi", "burfi", "ladoo", "laddoo", "mithai"], url: "https://images.unsplash.com/photo-1609681536894-87a04a29a2e2?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["kheer", "halwa", "rasmalai", "ras malai"],   url: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["lassi", "shake", "faluda", "falooda"],       url: "https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["chai", "tea"],                               url: "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["mango", "juice"],                            url: "https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["burger"],                                    url: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["sandwich"],                                  url: "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["paneer", "tikka"],                           url: "https://images.unsplash.com/photo-1561564645-1539b4e09f3b?auto=format&fit=crop&w=400&q=80" },
+  { keys: ["dal", "curry", "makhani"],                   url: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80" },
+];
+
+function getItemImage(name: string, imageUrl: string | null): string | null {
+  if (imageUrl) return imageUrl;
+  const lower = name.toLowerCase();
+  for (const entry of ITEM_IMAGES) {
+    if (entry.keys.some(k => lower.includes(k))) return entry.url;
+  }
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Store component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -183,7 +213,6 @@ export function Store() {
   }
 
   const filtered = items.filter(item => {
-    if (item.available === false) return false;
     const catMatch = activeCategory === "all" || item.category_id === activeCategory;
     const q = search.trim().toLowerCase();
     const searchMatch = !q
@@ -401,6 +430,7 @@ function ItemCard({
         border: "1px solid var(--border)",
         boxShadow: "0 2px 12px rgba(0,0,0,0.2)",
         transition: "transform 0.15s ease, box-shadow 0.15s ease",
+        opacity: item.available === false ? 0.62 : 1,
       }}
       onMouseEnter={e => {
         (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
@@ -413,20 +443,28 @@ function ItemCard({
     >
       {/* Thumbnail */}
       <div
-        className="flex-none flex items-center justify-center"
+        className="flex-none relative flex items-center justify-center overflow-hidden"
         style={{ height: 108, background: theme.grad }}
       >
-        <span
-          style={{
-            fontSize: 48,
-            lineHeight: 1,
-            filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.25))",
-            transition: "transform 0.2s ease",
-          }}
-          className="group-hover:scale-110"
-        >
-          {theme.emoji}
-        </span>
+        <FoodImage
+          src={getItemImage(item.name, item.image_url)}
+          alt={item.name}
+          emoji={theme.emoji}
+          emojiSize={48}
+        />
+        {item.available === false && (
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.52)" }}
+          >
+            <span
+              className="text-xs font-bold px-2.5 py-1 rounded-lg tracking-wide"
+              style={{ background: "rgba(239,68,68,0.92)", color: "#fff" }}
+            >
+              SOLD OUT
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -463,15 +501,16 @@ function ItemCard({
           </span>
           <button
             onClick={handleAdd}
-            className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition-all duration-150 active:scale-95"
+            disabled={item.available === false}
+            className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition-all duration-150 active:scale-95 disabled:cursor-not-allowed"
             style={{
-              background: flash ? "#22c55e" : "var(--accent)",
-              color: "#000",
+              background: item.available === false ? "var(--surface-raised)" : flash ? "#22c55e" : "var(--accent)",
+              color: item.available === false ? "var(--text-dim)" : "#000",
               minWidth: 52,
               justifyContent: "center",
             }}
           >
-            {flash ? "✓" : "+ Add"}
+            {item.available === false ? "Sold Out" : flash ? "✓" : "+ Add"}
           </button>
         </div>
       </div>
@@ -723,12 +762,15 @@ function ItemModal({
       >
         {/* Hero */}
         <div
-          className="flex-none relative flex items-center justify-center"
+          className="flex-none relative flex items-center justify-center overflow-hidden"
           style={{ height: 140, background: theme.grad }}
         >
-          <span style={{ fontSize: 72, lineHeight: 1, filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.35))" }}>
-            {theme.emoji}
-          </span>
+          <FoodImage
+            src={getItemImage(item.name, item.image_url)}
+            alt={item.name}
+            emoji={theme.emoji}
+            emojiSize={72}
+          />
           <button
             onClick={onClose}
             className="absolute top-3 right-3 w-7 h-7 rounded-full flex items-center justify-center text-xs"
@@ -862,15 +904,15 @@ function ItemModal({
           {/* Add to cart */}
           <button
             onClick={handleAdd}
-            disabled={!requiredMet}
+            disabled={!requiredMet || item.available === false}
             className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-[.98] disabled:opacity-40 disabled:cursor-not-allowed"
             style={{
-              background: requiredMet ? "var(--accent)" : "var(--surface-raised)",
-              color: requiredMet ? "#000" : "var(--text-dim)",
-              boxShadow: requiredMet ? "0 2px 12px rgba(245,158,11,0.3)" : "none",
+              background: (requiredMet && item.available !== false) ? "var(--accent)" : "var(--surface-raised)",
+              color: (requiredMet && item.available !== false) ? "#000" : "var(--text-dim)",
+              boxShadow: (requiredMet && item.available !== false) ? "0 2px 12px rgba(245,158,11,0.3)" : "none",
             }}
           >
-            Add to Cart — {cad(totalPrice)}
+            {item.available === false ? "Currently Unavailable" : `Add to Cart — ${cad(totalPrice)}`}
           </button>
         </div>
       </div>
@@ -1245,6 +1287,43 @@ function Label({ children }: { children: React.ReactNode }) {
     >
       {children}
     </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FoodImage — shows real photo when available; falls back to emoji on error
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FoodImage({
+  src, alt, emoji, emojiSize,
+}: {
+  src: string | null; alt: string; emoji: string; emojiSize: number;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return (
+      <span
+        style={{
+          fontSize: emojiSize,
+          lineHeight: 1,
+          filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.25))",
+          transition: "transform 0.2s ease",
+        }}
+        className="group-hover:scale-110"
+      >
+        {emoji}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="absolute inset-0 w-full h-full object-cover"
+      onError={() => setFailed(true)}
+    />
   );
 }
 

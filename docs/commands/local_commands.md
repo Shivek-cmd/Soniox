@@ -1,12 +1,14 @@
 # Daily Run Commands
 
-Every time you want to run the voice agent, you need 2 or 3 terminals open.
-- **Browser testing** → Terminal 1 + Terminal 2
+Every time you want to run the voice agent locally, you need 2–5 terminals open.
+- **Browser AI tab only** → Terminal 1 + Terminal 2
+- **Browser AI tab + Browse Store tab** → Terminal 1 + Terminal 2 + Terminal 5
 - **Real phone calls (Twilio)** → Terminal 1 + Terminal 3 + Terminal 4
+- **Everything** → Terminal 1 + Terminal 2 + Terminal 3 + Terminal 4 + Terminal 5
 
 ---
 
-## Terminal 1 — Voice Server (ALWAYS required)
+## Terminal 1 — Voice Server (ALWAYS required for AI tab)
 
 ```powershell
 cd "D:\Chrishan Solution\Soniox\soniox_examples\apps\soniox-voice-bot-demo\server"
@@ -21,7 +23,7 @@ Starting WebSocket server  host=localhost port=8765
 
 ---
 
-## Terminal 2 — Frontend (browser testing only)
+## Terminal 2 — Frontend (browser testing)
 
 ```powershell
 cd "D:\Chrishan Solution\Soniox\soniox_examples\apps\soniox-voice-bot-demo\frontend"
@@ -29,6 +31,10 @@ npm run dev
 ```
 
 **Then open:** http://localhost:5173
+
+The app has two tabs:
+- **Order with Sierra** — AI voice ordering (requires Terminal 1)
+- **Browse Store** — e-commerce store (requires Terminal 5 for live menu, or falls back to static `menu.json`)
 
 ---
 
@@ -78,6 +84,28 @@ Forwarding  https://xxxx.ngrok-free.app -> http://localhost:5050
 
 ---
 
+## Terminal 5 — Store API (Browse Store tab)
+
+```powershell
+cd "D:\Chrishan Solution\Soniox\soniox_examples\apps\soniox-voice-bot-demo\store-api"
+pip install -r requirements.txt   # first time only
+$env:CLOVER_BASE_URL="https://apisandbox.dev.clover.com"
+$env:CLOVER_MERCHANT_ID="your_merchant_id"
+$env:CLOVER_ACCESS_TOKEN="your_access_token"
+uvicorn main:app --host 0.0.0.0 --port 8766 --reload
+```
+
+**You should see:**
+```
+INFO:     Uvicorn running on http://0.0.0.0:8766
+```
+
+The Vite dev server automatically proxies `/store-api/*` → `http://localhost:8766` (configured in `vite.config.ts`). So when the React app calls `/store-api/menu`, it reaches this service.
+
+> **Without Terminal 5:** The Browse Store tab still works — it falls back to static `menu.json` data. Items are visible but prices/inventory won't reflect live Clover data. No order placement without the store-api running.
+
+---
+
 ## Twilio Console Setup (do once per ngrok restart)
 
 1. Go to https://console.twilio.com
@@ -108,6 +136,14 @@ Your phone (+919413752688) will ring. Pick up and talk to the agent.
 
 ## Quick Checklist Before Testing
 
+### AI ordering tab (browser)
+- [ ] Terminal 1 running (server on port 8765)
+- [ ] Terminal 2 running (Vite dev on port 5173)
+
+### Browse Store tab
+- [ ] Terminal 5 running (store-api on port 8766) — or accept static fallback data
+
+### Phone calls
 - [ ] Terminal 1 running (server on port 8765)
 - [ ] Terminal 3 running (twilio bridge on port 5050)
 - [ ] Terminal 4 running (ngrok tunnel active)

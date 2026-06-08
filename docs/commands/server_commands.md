@@ -72,7 +72,7 @@ N8N_WEBHOOK_URL=
 
 # ── Clover POS ───────────────────────────────────────────────────────────────
 # Sandbox: https://apisandbox.dev.clover.com  |  Production: https://api.clover.com
-CLOVER_BASE_URL=https://api.clover.com
+CLOVER_BASE_URL=https://apisandbox.dev.clover.com
 CLOVER_MERCHANT_ID=your_clover_merchant_id
 CLOVER_ACCESS_TOKEN=your_clover_access_token
 # Leave empty for sandbox (sandbox tokens don't expire).
@@ -83,6 +83,8 @@ CLOVER_MENU_POLL_INTERVAL=300
 ```
 
 Press `Ctrl+O`, `Enter`, then `Ctrl+X` to save.
+
+> **Note:** `CLOVER_BASE_URL` is shared by `voice-server` (AI ordering) and `store-api` (Browse Store tab). Both switch to production with one env var change.
 
 ### 4. Build and start
 
@@ -125,10 +127,19 @@ docker compose restart
 
 ### Check status
 
-All 4 containers should be `Up`.
+All 5 containers should be `Up`.
 
 ```bash
 docker compose ps
+```
+
+Expected services:
+```text
+caddy
+frontend
+store-api
+twilio-bridge
+voice-server
 ```
 
 ### Watch live logs
@@ -142,6 +153,7 @@ docker compose logs -f
 ```bash
 docker compose logs -f voice-server
 docker compose logs -f twilio-bridge
+docker compose logs -f store-api
 docker compose logs -f caddy
 docker compose logs -f frontend
 ```
@@ -167,13 +179,47 @@ git pull
 docker compose up -d --build
 ```
 
-### Python-only changes (faster — skips frontend rebuild)
+### Python-only AI changes (faster — skips frontend rebuild)
 
 ```bash
 cd ~/Soniox
 git pull
 docker compose up -d --force-recreate voice-server twilio-bridge
 ```
+
+### Store-api only (fastest — when only store-api Python changed)
+
+```bash
+cd ~/Soniox
+git pull
+docker compose up -d --force-recreate store-api
+```
+
+---
+
+## Switching Clover from Sandbox to Production
+
+When you purchase Clover production access:
+
+```bash
+nano ~/Soniox/.env
+```
+
+Change:
+```env
+CLOVER_BASE_URL=https://apisandbox.dev.clover.com
+```
+To:
+```env
+CLOVER_BASE_URL=https://api.clover.com
+```
+
+Then restart both services that use Clover:
+```bash
+docker compose up -d --force-recreate voice-server store-api
+```
+
+This one change affects both the AI ordering tab (voice-server) and the Browse Store tab (store-api).
 
 ---
 
@@ -211,24 +257,25 @@ Your phone will ring. Pick up and talk to the agent.
 ```text
 Internet → voice.bizbull.ai (Caddy, ports 80/443)
                  |
-    ┌────────────┼──────────────────────┐
-    |            |                      |
-/ws             /incoming-call         /*
-    |           /transfer-twiml         |
-    v           /media-stream           v
-voice-server    /clover-webhook     frontend
-  :8765              |                :80
-                     v
-               twilio-bridge
-                  :5050
+    ┌────────────┼──────────────────┬───────────┐
+    |            |                  |           |
+/ws       /incoming-call       /store-api/*    /*
+          /transfer-twiml           |           |
+          /media-stream             v           v
+          /clover-webhook      store-api    frontend
+    |          |                 :8766        :80
+    v          v
+voice-server  twilio-bridge
+  :8765         :5050
 ```
 
-4 Docker containers:
+5 Docker containers:
 
 - `caddy` — HTTPS, path-based routing, auto SSL via Let's Encrypt
 - `twilio-bridge` — Twilio phone bridge + Clover inventory webhook relay
-- `voice-server` — VAD + STT + LLM + TTS pipeline + Clover POS client
-- `frontend` — React UI served by nginx (browser testing)
+- `voice-server` — VAD + STT + LLM + TTS pipeline + Clover POS client (AI ordering)
+- `store-api` — FastAPI: menu from Clover + order creation (Browse Store tab)
+- `frontend` — React UI served by nginx (both tabs: AI ordering + Browse Store)
 
 ---
 
@@ -239,9 +286,22 @@ voice-server    /clover-webhook     frontend
 ```bash
 docker compose logs voice-server
 docker compose logs twilio-bridge
+docker compose logs store-api
 ```
 
 If voice-server exits immediately, check Clover credentials — the server calls `CloverClient.init()` at startup and exits with code 1 if Clover is unreachable.
+
+If store-api exits, check `CLOVER_BASE_URL`, `CLOVER_MERCHANT_ID`, and `CLOVER_ACCESS_TOKEN` in `.env`.
+
+### Browse Store tab shows no items
+
+Check store-api is running and can reach Clover:
+
+```bash
+docker compose logs store-api
+```
+
+If store-api is down, the frontend automatically falls back to static `menu.json` data — the store still loads but won't reflect live Clover prices.
 
 ### SSL cert issues
 

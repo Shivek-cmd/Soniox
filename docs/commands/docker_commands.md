@@ -44,12 +44,14 @@ docker compose ps
 Use when:
 
 - You want to check if the app is running
-- You want to see `voice-server`, `twilio-bridge`, and `caddy`
+- You want to see all 5 services are `Up`
 
 Expected services:
 
 ```text
 caddy
+frontend
+store-api
 twilio-bridge
 voice-server
 ```
@@ -106,6 +108,18 @@ Use when:
 - `/media-stream` is failing
 - Audio is not reaching the voice server
 
+Store API logs:
+
+```bash
+docker compose logs -f store-api
+```
+
+Use when:
+
+- Browse Store tab is not loading menu items
+- Order placement from the store is failing
+- You want to verify Clover API calls are succeeding
+
 Caddy logs:
 
 ```bash
@@ -117,6 +131,17 @@ Use when:
 - Domain is not opening
 - HTTPS/SSL has an issue
 - `voice.bizbull.ai` is not routing to the app
+
+Frontend logs:
+
+```bash
+docker compose logs -f frontend
+```
+
+Use when:
+
+- The React UI is not loading at all
+- nginx is erroring
 
 ---
 
@@ -156,6 +181,17 @@ Use when:
 - Twilio connection is acting weird
 - Incoming calls are not reaching the voice server
 
+Restart only the store API:
+
+```bash
+docker compose restart store-api
+```
+
+Use when:
+
+- Browse Store is not loading or returning errors
+- You changed Clover env vars and want store-api to pick them up
+
 Restart only Caddy:
 
 ```bash
@@ -171,6 +207,8 @@ Use when:
 
 ## Faster Deploy For Python-Only Changes
 
+### AI tab only (voice-server + twilio-bridge)
+
 ```bash
 git pull
 docker compose up -d --force-recreate voice-server twilio-bridge
@@ -178,15 +216,44 @@ docker compose up -d --force-recreate voice-server twilio-bridge
 
 Use when:
 
-- You only changed Python files
-- You did not change dependencies
-- You did not change Dockerfiles
+- You only changed Python files in `server/` or `twilio/`
+- You did not change dependencies or Dockerfiles
+
+### Store API only
+
+```bash
+git pull
+docker compose up -d --force-recreate store-api
+```
+
+Use when:
+
+- You only changed `store-api/main.py`
+- Fastest possible deploy for store-api changes (skips all other rebuilds)
 
 If unsure, use the safer full command:
 
 ```bash
 git pull
 docker compose up -d --build
+```
+
+---
+
+## Switch Clover from Sandbox to Production
+
+Edit the env file:
+
+```bash
+nano ~/Soniox/.env
+```
+
+Change `CLOVER_BASE_URL=https://apisandbox.dev.clover.com` → `https://api.clover.com`
+
+Then restart both Clover-dependent services:
+
+```bash
+docker compose up -d --force-recreate voice-server store-api
 ```
 
 ---
@@ -312,12 +379,3 @@ docker compose up -d --build
 docker compose ps
 docker compose logs -f
 ```
-
-
-
-
-
-git pull && docker compose down && docker compose build --no-cache && docker compose up -d
-
-
-docker compose up -d --build voice-server
