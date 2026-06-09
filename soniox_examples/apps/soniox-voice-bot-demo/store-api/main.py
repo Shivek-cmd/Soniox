@@ -459,6 +459,10 @@ async def create_checkout(req: CheckoutRequest):
             "lineItems": line_items,
             "note":      " | ".join(parts),
         },
+        "redirectUrls": {
+            "success": f"{FRONTEND_URL}?payment=success",
+            "failure": f"{FRONTEND_URL}?payment=cancelled",
+        },
     }
 
     async with httpx.AsyncClient() as client:
