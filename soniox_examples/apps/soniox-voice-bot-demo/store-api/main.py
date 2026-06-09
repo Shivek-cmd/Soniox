@@ -229,9 +229,9 @@ async def get_discounts():
         data = await _get(client, "discounts", limit=200)
 
     discounts = [
-        {"id": d["id"], "name": d.get("name", "")}
+        {"id": d["id"], "name": d.get("name", "").strip()}
         for d in data.get("elements", [])
-        if d.get("name")
+        if d.get("name", "").strip()
     ]
     return {"discounts": discounts}
 
@@ -403,15 +403,14 @@ async def create_checkout(req: CheckoutRequest):
             )
 
         subtotal = sum(li.price * li.quantity for li in req.items)
-        amt      = matched.get("amount", 0)
-        pct_raw  = matched.get("percentage", 0)
+        # Clover stores fixed-amount discounts as negative cents (e.g. -500 = $5 off)
+        amt     = abs(matched.get("amount", 0))
+        pct_raw = matched.get("percentage", 0)
 
         if amt > 0:
-            # Fixed-amount discount (cents)
             discount_amount = min(amt, subtotal)
         elif pct_raw > 0:
-            # Clover stores percentage as integer; guard for both plain (10) and
-            # basis-point (100000) formats used in different SDK versions.
+            # Guard for both plain % (10) and basis-point (100000) formats
             actual_pct = pct_raw / 10000.0 if pct_raw > 100 else float(pct_raw)
             discount_amount = round(subtotal * actual_pct / 100)
 
