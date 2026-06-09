@@ -30,8 +30,13 @@ CLOVER_MERCHANT_ID  = os.environ["CLOVER_MERCHANT_ID"]
 CLOVER_ACCESS_TOKEN = os.environ["CLOVER_ACCESS_TOKEN"]
 FRONTEND_URL        = os.environ.get("FRONTEND_URL", "https://voice.bizbull.ai").rstrip("/")
 
-BASE             = f"{CLOVER_BASE_URL}/v3/merchants/{CLOVER_MERCHANT_ID}"
+# Hosted Checkout needs a separate PAKMS ecom key, not the standard OAuth token.
+# Can be set manually via CLOVER_ECOM_KEY; if omitted, fetched from /pakms/apikey on startup.
+CLOVER_ECOM_KEY: str | None = os.environ.get("CLOVER_ECOM_KEY") or None
+
+BASE              = f"{CLOVER_BASE_URL}/v3/merchants/{CLOVER_MERCHANT_ID}"
 CHECKOUT_ENDPOINT = f"{CLOVER_BASE_URL}/invoicingcheckoutservice/v1/checkouts"
+PAKMS_URL         = f"{CLOVER_BASE_URL}/pakms/apikey"
 
 
 def _headers() -> dict[str, str]:
@@ -41,10 +46,29 @@ def _headers() -> dict[str, str]:
     }
 
 
+def _ecom_headers() -> dict[str, str]:
+    """Headers for the Hosted Checkout / PAKMS ecommerce endpoints."""
+    key = CLOVER_ECOM_KEY or CLOVER_ACCESS_TOKEN
+    return {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+
+
 # ── App ───────────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    global CLOVER_ECOM_KEY
+    if not CLOVER_ECOM_KEY:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(PAKMS_URL, headers=_headers(), timeout=10.0)
+                resp.raise_for_status()
+                CLOVER_ECOM_KEY = resp.json()["apiAccessKey"]
+            log.info("ecom key fetched from PAKMS", key_prefix=CLOVER_ECOM_KEY[:8] + "...")
+        except Exception as exc:
+            log.warning("could not fetch PAKMS ecom key — checkout will use OAuth token", error=str(exc))
     log.info("store-api started", merchant_id=CLOVER_MERCHANT_ID, base=CLOVER_BASE_URL)
     yield
     log.info("store-api stopped")
@@ -433,11 +457,14 @@ async def create_checkout(req: CheckoutRequest):
         resp = await client.post(
             CHECKOUT_ENDPOINT,
             json=payload,
-            headers=_headers(),
+            headers=_ecom_headers(),
             timeout=15.0,
         )
         if resp.status_code == 401:
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Clover auth error — check CLOVER_ACCESS_TOKEN")
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Clover ecom auth error — PAKMS key invalid or not fetched; set CLOVER_ECOM_KEY in .env",
+            )
         if not resp.is_success:
             body = resp.text
             log.error("hosted checkout failed", status=resp.status_code, body=body)
