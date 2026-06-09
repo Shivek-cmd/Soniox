@@ -429,12 +429,11 @@ async def create_checkout(req: CheckoutRequest):
             entry["note"] = li.note
         line_items.append(entry)
 
-    if discount_amount > 0:
-        line_items.append({
-            "name":    f"Discount: {discount_label}",
-            "unitQty": 1,
-            "price":   -discount_amount,
-        })
+    # ── Apply discount by scaling unit prices (Hosted Checkout rejects negative prices) ──
+    if discount_amount > 0 and subtotal > 0:
+        scale = (subtotal - discount_amount) / subtotal
+        for entry in line_items:
+            entry["price"] = max(1, round(entry["price"] * scale))
 
     # ── Build order note ──────────────────────────────────────────────────────
     parts = [f"Online Order — {req.order_type.replace('_', ' ').title()}"]
@@ -444,6 +443,8 @@ async def create_checkout(req: CheckoutRequest):
         parts.append(f"Phone: {req.customer_phone}")
     if req.note:
         parts.append(req.note)
+    if discount_amount > 0:
+        parts.append(f"Promo: {discount_label} (-${discount_amount / 100:.2f})")
 
     # ── Call Clover Hosted Checkout API ───────────────────────────────────────
     # merchant is identified via X-Clover-Merchant-Id header, NOT in the body
