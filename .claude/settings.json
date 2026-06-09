@@ -37,7 +37,15 @@
       "Bash(New-Item -ItemType Directory -Force \"d:\\\\Chrishan Solution\\\\Soniox\\\\soniox_examples\\\\apps\\\\soniox-voice-bot-demo\\\\store-api\")",
       "Bash(Out-Null)",
       "Bash(Write-Host \"done\")",
-      "PowerShell(New-Item -ItemType Directory -Force \"d:\\\\Chrishan Solution\\\\Soniox\\\\soniox_examples\\\\apps\\\\soniox-voice-bot-demo\\\\store-api\")"
+      "PowerShell(New-Item -ItemType Directory -Force \"d:\\\\Chrishan Solution\\\\Soniox\\\\soniox_examples\\\\apps\\\\soniox-voice-bot-demo\\\\store-api\")",
+      "Bash(npx tsc *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "WebFetch(domain:community.clover.com)",
+      "WebFetch(domain:csiworks.net)",
+      "WebFetch(domain:www.clover.com)",
+      "WebFetch(domain:payplaxe.com)",
+      "WebFetch(domain:www.scale4clover.com)"
     ],
     "additionalDirectories": [
       "C:\\Users\\shive\\.claude"
