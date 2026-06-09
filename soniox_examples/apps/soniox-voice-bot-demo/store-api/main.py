@@ -4,7 +4,8 @@ Serves menu from Clover and creates orders. Used by the Browse Store tab.
 
 Endpoints:
     GET  /menu              → categories + items + modifiers from Clover
-    POST /orders            → create a Clover order from the cart
+    GET  /discounts         → active named discounts from Clover
+    POST /orders            → create a Clover order from the cart (optional discount_code)
     GET  /orders/{id}       → fetch order status
     GET  /health            → liveness probe
 """
@@ -177,6 +178,26 @@ async def get_menu():
     return {"categories": categories, "items": items}
 
 
+# ── GET /discounts ────────────────────────────────────────────────────────────
+
+@app.get("/discounts")
+async def get_discounts():
+    """
+    Returns active named discounts from Clover.
+    Response: { discounts: [{ id, name }] }
+    Only returns discounts that have a name (promo-code candidates).
+    """
+    async with httpx.AsyncClient() as client:
+        data = await _get(client, "discounts", limit=200)
+
+    discounts = [
+        {"id": d["id"], "name": d.get("name", "")}
+        for d in data.get("elements", [])
+        if d.get("name")
+    ]
+    return {"discounts": discounts}
+
+
 # ── POST /orders ──────────────────────────────────────────────────────────────
 
 class OrderLineItem(BaseModel):
@@ -194,6 +215,7 @@ class PlaceOrderRequest(BaseModel):
     customer_name:  str = ""
     customer_phone: str = ""
     note:           str = ""
+    discount_code:  str | None = None  # promo code name (matched case-insensitively against Clover discount names)
 
 
 @app.post("/orders", status_code=201)
@@ -215,8 +237,25 @@ async def create_order(req: PlaceOrderRequest):
         parts.append(req.note)
     order_note = " | ".join(parts)
 
+    subtotal_cents = sum(li.price * li.quantity for li in req.items)
+
     async with httpx.AsyncClient() as client:
-        # 1. Create the parent order record
+        # 1. Validate discount code before creating order (fail fast)
+        matched_discount: dict | None = None
+        if req.discount_code:
+            disc_data = await _get(client, "discounts", limit=200)
+            matched_discount = next(
+                (d for d in disc_data.get("elements", [])
+                 if d.get("name", "").strip().upper() == req.discount_code.strip().upper()),
+                None,
+            )
+            if not matched_discount:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"Promo code '{req.discount_code}' is not valid.",
+                )
+
+        # 2. Create the parent order record
         order = await _post(client, "orders", {
             "state":    "open",
             "note":     order_note,
@@ -225,7 +264,7 @@ async def create_order(req: PlaceOrderRequest):
         order_id = order["id"]
         log.info("order created", order_id=order_id, customer=req.customer_name)
 
-        # 2. Add one line item per unit (Clover charges per line item, not per qty field)
+        # 3. Add one line item per unit (Clover has no quantity field on line items)
         for li in req.items:
             for _ in range(li.quantity):
                 body: dict = {
@@ -238,7 +277,7 @@ async def create_order(req: PlaceOrderRequest):
                 created_li = await _post(client, f"orders/{order_id}/line_items", body)
                 li_id = created_li["id"]
 
-                # 3. Attach modifiers to each line item
+                # 4. Attach modifiers to each line item
                 for mod_id in li.modifier_ids:
                     await _post(
                         client,
@@ -246,15 +285,41 @@ async def create_order(req: PlaceOrderRequest):
                         {"modifier": {"id": mod_id}},
                     )
 
-    total_cents = sum(li.price * li.quantity for li in req.items)
-    log.info("order complete", order_id=order_id, total_cents=total_cents)
+        # 5. Apply discount if provided — Clover computes the exact amount server-side
+        discount_amount = 0
+        discount_name: str | None = None
+        if matched_discount:
+            await _post(
+                client,
+                f"orders/{order_id}/discounts",
+                {"discount": {"id": matched_discount["id"]}},
+            )
+            # Fetch the updated order total so we return Clover's authoritative value
+            updated_order = await _get(client, f"orders/{order_id}")
+            clover_total = updated_order.get("total", subtotal_cents)
+            discount_amount = max(0, subtotal_cents - clover_total)
+            discount_name = matched_discount.get("name")
+            log.info(
+                "discount applied",
+                order_id=order_id,
+                code=discount_name,
+                discount_cents=discount_amount,
+            )
 
-    return {
+    final_total = subtotal_cents - discount_amount
+    log.info("order complete", order_id=order_id, subtotal_cents=subtotal_cents, final_total=final_total)
+
+    response: dict = {
         "order_id":      order_id,
-        "total":         total_cents,
-        "total_display": f"${total_cents / 100:.2f}",
+        "total":         final_total,
+        "total_display": f"${final_total / 100:.2f}",
         "state":         "open",
     }
+    if discount_amount > 0:
+        response["discount_amount"]  = discount_amount
+        response["discount_display"] = f"-${discount_amount / 100:.2f}"
+        response["discount_name"]    = discount_name
+    return response
 
 
 # ── GET /orders/{order_id} ────────────────────────────────────────────────────

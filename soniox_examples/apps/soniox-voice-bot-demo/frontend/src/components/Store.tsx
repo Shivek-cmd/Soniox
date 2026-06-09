@@ -178,7 +178,7 @@ export function Store() {
 
   const [selectedItem,   setSelectedItem]   = useState<StoreItem | null>(null);
   const [showCheckout,   setShowCheckout]   = useState(false);
-  const [confirmedOrder, setConfirmedOrder] = useState<{ order_id: string; total: number } | null>(null);
+  const [confirmedOrder, setConfirmedOrder] = useState<{ order_id: string; total: number; discount_amount?: number; discount_name?: string } | null>(null);
   const [showCart,       setShowCart]       = useState(false);
 
   const [cart, dispatch] = useReducer(cartReducer, []);
@@ -429,7 +429,7 @@ export function Store() {
         <SuccessOverlay
           order={confirmedOrder}
           isMobile={isMobile}
-          onDone={() => { setConfirmedOrder(null); setShowCheckout(false); }}
+          onDone={() => { setConfirmedOrder(null); setShowCheckout(false); setShowCart(false); }}
         />
       )}
     </div>
@@ -1137,18 +1137,17 @@ function ItemModal({
 // Checkout modal
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface DiscountOption { id: string; name: string; }
+
 function CheckoutModal({
   cart, total, onClose, onConfirmed, isMobile,
 }: {
   cart: CartEntry[];
   total: number;
   onClose: () => void;
-  onConfirmed: (order: { order_id: string; total: number }) => void;
+  onConfirmed: (order: { order_id: string; total: number; discount_amount?: number; discount_name?: string }) => void;
   isMobile: boolean;
 }) {
-  const gst   = Math.round(total * 0.05);
-  const grand = total + gst;
-
   const [name,      setName]      = useState("");
   const [phone,     setPhone]     = useState("");
   const [orderType, setOrderType] = useState<"pickup" | "dine_in">("pickup");
@@ -1156,34 +1155,83 @@ function CheckoutModal({
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState<string | null>(null);
 
+  // ── Promo code state ───────────────────────────────────────────────────────
+  const [promoInput,     setPromoInput]     = useState("");
+  const [appliedDiscount, setAppliedDiscount] = useState<DiscountOption | null>(null);
+  const [promoError,     setPromoError]     = useState<string | null>(null);
+  const [discountList,   setDiscountList]   = useState<DiscountOption[]>([]);
+
+  // Fetch available discounts once when modal opens
+  useEffect(() => {
+    fetch(`${STORE_API}/discounts`)
+      .then(r => r.ok ? r.json() : { discounts: [] })
+      .then(d => setDiscountList(d.discounts ?? []))
+      .catch(() => {});
+  }, []);
+
+  function applyPromo() {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+    const match = discountList.find(d => d.name.toUpperCase() === code);
+    if (match) {
+      setAppliedDiscount(match);
+      setPromoError(null);
+    } else {
+      setAppliedDiscount(null);
+      setPromoError("Invalid promo code.");
+    }
+  }
+
+  function removePromo() {
+    setAppliedDiscount(null);
+    setPromoInput("");
+    setPromoError(null);
+  }
+
+  // ── Pricing ────────────────────────────────────────────────────────────────
+  // We don't know the exact discount amount until the server applies it in Clover,
+  // so we show the subtotal line with a "Discount applied" notice. The confirmed
+  // success overlay shows the actual savings returned by the API.
+  const gst   = Math.round(total * 0.05);
+  const grand = total + gst;
+
+  // ── Submit ─────────────────────────────────────────────────────────────────
   async function confirm() {
     if (!name.trim()) { setError("Please enter your name."); return; }
     setLoading(true); setError(null);
     try {
+      const body: Record<string, unknown> = {
+        items: cart.map(e => ({
+          item_id:      e.item.id,
+          name:         e.item.name,
+          price:        e.item.price,
+          quantity:     e.quantity,
+          modifier_ids: e.selected_modifiers.map(m => m.id),
+          note:         e.note,
+        })),
+        order_type:     orderType,
+        customer_name:  name.trim(),
+        customer_phone: phone.trim(),
+        note:           note.trim(),
+      };
+      if (appliedDiscount) body.discount_code = appliedDiscount.name;
+
       const resp = await fetch(`${STORE_API}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: cart.map(e => ({
-            item_id:      e.item.id,
-            name:         e.item.name,
-            price:        e.item.price,
-            quantity:     e.quantity,
-            modifier_ids: e.selected_modifiers.map(m => m.id),
-            note:         e.note,
-          })),
-          order_type:     orderType,
-          customer_name:  name.trim(),
-          customer_phone: phone.trim(),
-          note:           note.trim(),
-        }),
+        body: JSON.stringify(body),
       });
       if (!resp.ok) {
-        const body = await resp.json().catch(() => ({}));
-        throw new Error((body as any).detail ?? `Server error (${resp.status})`);
+        const payload = await resp.json().catch(() => ({}));
+        throw new Error((payload as any).detail ?? `Server error (${resp.status})`);
       }
       const data = await resp.json();
-      onConfirmed({ order_id: data.order_id, total: grand });
+      onConfirmed({
+        order_id:        data.order_id,
+        total:           data.total ?? grand,
+        discount_amount: data.discount_amount,
+        discount_name:   data.discount_name,
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to place order. Please try again.");
     } finally {
@@ -1299,7 +1347,63 @@ function CheckoutModal({
             />
           </div>
 
-          {/* Instructions */}
+          {/* Promo code */}
+          <div>
+            <Label>Promo Code</Label>
+            {appliedDiscount ? (
+              <div
+                className="flex items-center justify-between mt-2 px-4 py-3 rounded-xl"
+                style={{
+                  background: "rgba(34,197,94,0.08)",
+                  border: "1px solid rgba(34,197,94,0.25)",
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <span style={{ color: "#22c55e", fontSize: 14 }}>✓</span>
+                  <span className="text-sm font-semibold" style={{ color: "#22c55e" }}>
+                    {appliedDiscount.name}
+                  </span>
+                  <span className="text-xs" style={{ color: "var(--text-dim)" }}>applied</span>
+                </div>
+                <button
+                  onClick={removePromo}
+                  className="text-xs"
+                  style={{ color: "var(--text-dim)" }}
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2 mt-2">
+                <input
+                  type="text"
+                  placeholder="Enter code"
+                  value={promoInput}
+                  onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoError(null); }}
+                  onKeyDown={e => { if (e.key === "Enter") applyPromo(); }}
+                  className="flex-1 px-4 py-3 rounded-xl text-sm outline-none font-mono tracking-wide"
+                  style={{
+                    background: "var(--surface-raised)",
+                    border: `1px solid ${promoError ? "rgba(239,68,68,0.5)" : "var(--border)"}`,
+                    color: "var(--text)",
+                  }}
+                />
+                <button
+                  onClick={applyPromo}
+                  disabled={!promoInput.trim()}
+                  className="px-4 py-3 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-40"
+                  style={{ background: "var(--surface-raised)", color: "var(--text)", border: "1px solid var(--border)" }}
+                >
+                  Apply
+                </button>
+              </div>
+            )}
+            {promoError && (
+              <p className="text-xs mt-1.5" style={{ color: "#f87171" }}>{promoError}</p>
+            )}
+          </div>
+
+          {/* Special Instructions */}
           <div>
             <Label>Special Instructions</Label>
             <textarea
@@ -1351,6 +1455,12 @@ function CheckoutModal({
                   <span style={{ color: "var(--text-muted)" }}>Subtotal</span>
                   <span style={{ color: "var(--text)" }}>{cad(total)}</span>
                 </div>
+                {appliedDiscount && (
+                  <div className="flex justify-between text-xs">
+                    <span style={{ color: "#22c55e" }}>Promo: {appliedDiscount.name}</span>
+                    <span className="font-semibold" style={{ color: "#22c55e" }}>Applied ✓</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-xs">
                   <span style={{ color: "var(--text-muted)" }}>GST (5%)</span>
                   <span style={{ color: "var(--text)" }}>{cad(gst)}</span>
@@ -1360,7 +1470,14 @@ function CheckoutModal({
                   style={{ borderColor: "var(--border)" }}
                 >
                   <span style={{ color: "var(--text)" }}>Total</span>
-                  <span style={{ color: "var(--accent)" }}>{cad(grand)}</span>
+                  <span style={{ color: "var(--accent)" }}>
+                    {cad(grand)}
+                    {appliedDiscount && (
+                      <span className="text-xs font-normal ml-1" style={{ color: "var(--text-dim)" }}>
+                        (before discount)
+                      </span>
+                    )}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1410,16 +1527,18 @@ function CheckoutModal({
 function SuccessOverlay({
   order, onDone, isMobile,
 }: {
-  order: { order_id: string; total: number };
+  order: { order_id: string; total: number; discount_amount?: number; discount_name?: string };
   onDone: () => void;
   isMobile: boolean;
 }) {
+  const hasSavings = (order.discount_amount ?? 0) > 0;
+
   return (
     <Overlay onClose={onDone} isMobile={isMobile}>
       <div
         className="flex flex-col items-center text-center rounded-2xl px-8 py-10"
         style={{
-          width: isMobile ? "100%" : 360,
+          width: isMobile ? "100%" : 380,
           maxWidth: "100%",
           background: "var(--surface)",
           border: isMobile ? "none" : "1px solid var(--border)",
@@ -1444,9 +1563,25 @@ function SuccessOverlay({
         <h2 className="text-2xl font-black mb-1" style={{ color: "var(--text)" }}>
           Order Placed!
         </h2>
-        <p className="text-sm mb-8" style={{ color: "var(--text-muted)" }}>
+        <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
           Your order is confirmed at Parkash Sweets.
         </p>
+
+        {/* Savings banner */}
+        {hasSavings && (
+          <div
+            className="w-full flex items-center justify-center gap-2 rounded-xl px-4 py-3 mb-4"
+            style={{
+              background: "rgba(34,197,94,0.1)",
+              border: "1px solid rgba(34,197,94,0.25)",
+            }}
+          >
+            <span style={{ fontSize: 18 }}>🎉</span>
+            <span className="text-sm font-semibold" style={{ color: "#22c55e" }}>
+              You saved {cad(order.discount_amount!)} with {order.discount_name}
+            </span>
+          </div>
+        )}
 
         {/* Order details card */}
         <div
@@ -1463,7 +1598,9 @@ function SuccessOverlay({
             </span>
           </div>
           <div className="flex justify-between mb-2">
-            <span className="text-xs" style={{ color: "var(--text-dim)" }}>Total (incl. GST)</span>
+            <span className="text-xs" style={{ color: "var(--text-dim)" }}>
+              Total {hasSavings ? "(after discount + GST)" : "(incl. GST)"}
+            </span>
             <span className="text-xs font-bold" style={{ color: "var(--text)" }}>
               {cad(order.total)}
             </span>
