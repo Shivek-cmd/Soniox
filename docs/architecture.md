@@ -101,7 +101,9 @@ FastAPI app on port 8766. Powers the "Browse Store" tab in the React frontend.
 
 Responsibilities:
 - `GET /menu` — fetches all items from Clover with categories and modifier groups, filters hidden/deleted/variable-price items, returns clean JSON
-- `POST /orders` — creates a Clover order from the cart (parent order + line items + modifier modifications)
+- `GET /discounts` — returns active named discounts from Clover (`{ discounts: [{ id, name }] }`)
+- `POST /checkout` — creates a Clover Hosted Checkout session; optionally applies a named discount; returns `{ checkout_url, session_id, discount_amount, discount_name }`. Frontend redirects the customer to `checkout_url`; Clover handles card entry and redirects back to `FRONTEND_URL?payment=success` or `?payment=cancelled`.
+- `POST /orders` — creates a Clover order from the cart (used by the voice-server AI tab path; supports optional `discount_code`)
 - `GET /orders/{id}` — polls order state from Clover
 - `GET /health` — liveness probe
 
@@ -112,9 +114,10 @@ Key env vars:
 CLOVER_BASE_URL=https://api.clover.com
 CLOVER_MERCHANT_ID=...
 CLOVER_ACCESS_TOKEN=...
+FRONTEND_URL=https://voice.bizbull.ai   # used for Hosted Checkout redirect URLs
 ```
 
-**Payment:** Clover Hosted Checkout (redirect-based payment) is not yet implemented. Currently creates the order record in Clover but does not process payment. Payment will be added when Clover production access is purchased.
+**Payment:** Implemented via Clover Hosted Checkout redirect flow. Test card: `4111 1111 1111 1111`, any future expiry, any CVV. To switch from sandbox to production, change `CLOVER_BASE_URL` and redeploy store-api only.
 
 ---
 
@@ -126,7 +129,9 @@ React + Vite app, served via nginx on port 80.
 
 Two tabs:
 - **Order with Sierra** — AI voice ordering (Sierra avatar, menu panel, live order/receipt). No transcript shown. Bottom bar has language selector + Start/End call button.
-- **Browse Store** — e-commerce store: category filter, search, item grid, cart sidebar, item modal (modifier selection), checkout modal → creates order in store-api → shows Clover order ID.
+- **Browse Store** — e-commerce store: category filter, search, item grid (food photos + sold-out greyout), cart sidebar, item modal (modifier selection), checkout modal with promo code input → redirects to Clover Hosted Checkout for payment → success overlay with savings banner on return.
+
+**Mobile:** Fully responsive. Desktop tab switcher in header. Mobile: fixed bottom nav bar (64px); cart shown as floating amber FAB + slide-up bottom sheet; modals are full-screen. `useIsMobile(640)` hook drives layout switching.
 
 `VITE_SONIOX_VOICE_BOT_WS_URL` is a **build-time arg** baked into the JS bundle — must be set to `wss://voice.bizbull.ai/ws` before building. `VITE_STORE_API_URL` defaults to `/store-api` (correct for production via Caddy proxy) and does not need to be set.
 
@@ -169,30 +174,42 @@ Customer hears the agent
 ```text
 Customer opens voice.bizbull.ai → clicks "Browse Store" tab
   |
-  | GET /store-api/menu
+  | GET /store-api/menu  (+ GET /store-api/discounts for promo code list)
   v
-Caddy strips prefix → store-api:8766 /menu
+Caddy strips prefix → store-api:8766
   |
   | GET https://api.clover.com/v3/merchants/{id}/items?expand=categories,modifierGroups
   v
-Returns item list → React renders category grid
+Returns item list → React renders category grid (photos from Unsplash fallback,
+                                                  sold-out items greyed out)
 
-Customer browses → adds items to cart (pure frontend state)
+Customer browses → adds items to cart (pure frontend state, useReducer)
   |
-Customer clicks "Place Order" → fills name/phone/type → "Confirm Order"
+Customer clicks "Place Order" → fills name/phone/type/note
+  |   (optionally enters promo code → matched against /discounts list)
   |
-  | POST /store-api/orders  { items, order_type, customer_name, ... }
+  | POST /store-api/checkout  { items, order_type, customer_name, discount_code? }
   v
-store-api → POST /v3/merchants/{id}/orders
-         → POST /v3/merchants/{id}/orders/{id}/line_items  (one per unit)
-         → POST .../line_items/{id}/modifications          (per modifier)
+store-api:
+  → validates discount via GET /v3/merchants/{id}/discounts (if code provided)
+  → POST /invoicingcheckoutservice/v1/checkouts  (Clover Hosted Checkout)
+     redirectUrls: { success: FRONTEND_URL?payment=success,
+                     cancel:  FRONTEND_URL?payment=cancelled }
+  → returns { checkout_url, session_id, discount_amount, discount_name }
   |
-  v
-Returns { order_id, total_display }
+Frontend:
+  → saves { session_id, total, discount_amount, discount_name } to sessionStorage
+  → window.location.href = checkout_url   (navigates to Clover payment page)
   |
-  v
-Frontend shows success overlay with Clover order ID + 15–25 min wait
-Order appears immediately in Clover POS dashboard / kitchen display
+Customer enters card on Clover-hosted page → payment processed
+  |
+Clover redirects back → voice.bizbull.ai?payment=success (or ?payment=cancelled)
+  |
+Frontend:
+  → reads sessionStorage, restores order summary
+  → clears cart (CLEAR action)
+  → shows SuccessOverlay with total paid + savings banner if promo was used
+Order appears in Clover POS dashboard / kitchen display immediately
 ```
 
 ---
@@ -295,6 +312,7 @@ CLOVER_WEBHOOK_SECRET=...
 CLOVER_BASE_URL=https://api.clover.com        # or https://apisandbox.dev.clover.com for sandbox
 CLOVER_MERCHANT_ID=...
 CLOVER_ACCESS_TOKEN=...
+FRONTEND_URL=https://voice.bizbull.ai         # Hosted Checkout redirect base URL
 ```
 
 ### frontend (build-time args only — baked into JS bundle)
@@ -350,7 +368,7 @@ docker compose up -d --force-recreate store-api
 Caddy           = public HTTPS entrypoint, path-based routing to all 5 services
 twilio-bridge   = FastAPI: Twilio phone bridge + Clover inventory webhook relay
 voice-server    = WebSocket AI engine: VAD + STT + LLM + TTS + Clover POS client
-store-api       = FastAPI: e-commerce REST API — menu from Clover, order creation
+store-api       = FastAPI: e-commerce REST API — menu, discounts, Hosted Checkout payment
 frontend        = React UI — two tabs: AI ordering (Sierra) + Browse Store
 Soniox STT/TTS  = speech-to-text and text-to-speech (Punjabi / Hindi / English)
 OpenAI LLM      = conversation brain (gpt-4o-mini)

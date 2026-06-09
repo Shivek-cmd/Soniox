@@ -9,19 +9,14 @@ This is **separate from the AI ordering tab** — no voice, no Sierra, no WebSoc
 ## What's Built
 
 - Category filter pills + search bar
-- Responsive item grid with price, photo (if available), and "Add" button
+- Responsive item grid: food photos (Unsplash fallback per category), sold-out items greyed out with "Sold Out" badge
 - Item modal: modifier groups with radio (single) or checkbox (multi), disabled "Add to Cart" until required groups are satisfied
-- Cart sidebar: item list, quantity controls, subtotal + 5% GST + total
-- Checkout modal: customer name, phone, order type (dine-in / takeout), optional note
-- Order confirmation: success overlay with Clover order ID and ~15–25 min estimate
-- Graceful fallback: if `store-api` is unreachable, the store loads from static `menu.json`
-
----
-
-## What's NOT Built Yet
-
-- **Payment** — Clover Hosted Checkout (`POST /invoicingcheckoutservice/v1/checkouts` → redirect to Clover payment page) is not implemented. Orders are created in Clover but not paid.
-- **Wait:** payment will be added after purchasing Clover production access.
+- **Desktop:** cart sidebar (right panel). **Mobile:** floating amber cart FAB (fixed bottom-right) + slide-up bottom sheet
+- Checkout modal: customer name, phone, order type (dine-in / takeout), optional note, **promo code input** (matched against Clover named discounts)
+- **Payment via Clover Hosted Checkout** — clicking "Pay Now" redirects to Clover's payment page; on return `?payment=success`, cart is cleared and success overlay shown
+- Success overlay with total paid + green savings banner if a promo code was applied
+- Graceful fallback: if `store-api` is unreachable on startup, store loads from static `menu.json`
+- Fully mobile-responsive: `useIsMobile(640)` drives layout; mobile gets bottom nav, full-screen modals, cart bottom sheet
 
 ---
 
@@ -90,9 +85,19 @@ Returns:
 }
 ```
 
-### `POST /orders`
+### `GET /discounts`
 
-Request body:
+Returns named discounts configured in Clover (used to populate the promo code input):
+
+```json
+{ "discounts": [{ "id": "ABC123", "name": "SUMMER10" }] }
+```
+
+### `POST /checkout`
+
+**This is the primary checkout path for the Browse Store tab.**
+
+Request body (same shape as `POST /orders` plus optional `discount_code`):
 ```json
 {
   "items": [
@@ -109,25 +114,39 @@ Request body:
   "order_type": "takeout",
   "customer_name": "Raj Singh",
   "customer_phone": "7801234567",
-  "note": "Extra spicy please"
+  "note": "Extra spicy please",
+  "discount_code": "SUMMER10"
 }
 ```
 
-Clover has no quantity field on line items — the API posts one line_item per unit:
-```python
-for _ in range(item.quantity):
-    POST /v3/merchants/{mId}/orders/{orderId}/line_items
-    # then per modifier:
-    POST /v3/merchants/{mId}/orders/{orderId}/line_items/{lineItemId}/modifications
-```
+What happens server-side:
+1. If `discount_code` provided: validates it against `GET /v3/merchants/{mId}/discounts`
+2. Builds `line_items` list for Clover's Hosted Checkout payload
+3. If discount valid: appends a negative line item for the discount amount; computes `discount_amount` from Clover's percentage field (guards for both integer `%` and basis-point format)
+4. Calls `POST /invoicingcheckoutservice/v1/checkouts` with merchant, shoppingCart, customer, redirectUrls
+5. Returns redirect URL and session info
 
 Returns:
 ```json
 {
-  "order_id": "CLOVER_ORDER_ID",
-  "total_display": "$5.25"
+  "checkout_url": "https://checkout.clover.com/...",
+  "session_id": "SESSION_ID",
+  "discount_amount": 75,
+  "discount_name": "SUMMER10"
 }
 ```
+
+Frontend:
+- Saves `{ session_id, total, discount_amount, discount_name }` to `sessionStorage` as `pendingOrder`
+- Redirects: `window.location.href = checkout_url`
+- On return with `?payment=success`: reads sessionStorage, clears cart, shows `SuccessOverlay`
+- On return with `?payment=cancelled`: silently resumes browsing with cart intact
+
+**Test card:** `4111 1111 1111 1111`, any future expiry, any CVV (sandbox mode).
+
+### `POST /orders`
+
+Legacy endpoint — creates a Clover order without taking payment. Still used internally (e.g. voice-server AI tab path). Supports optional `discount_code`; returns `{ order_id, total_display, discount_amount?, discount_name? }`.
 
 ### `GET /orders/{order_id}`
 
@@ -155,18 +174,19 @@ Returns current Clover order state (for polling, not used in UI yet):
 
 | Component | Role |
 |-----------|------|
-| `Store` | Root: fetches menu, owns category/search/cart/modal state |
+| `Store` | Root: fetches menu + discounts, owns category/search/cart/modal state; handles `?payment=` redirect on mount |
 | `Pill` | Category filter button |
-| `ItemCard` | Grid card with name, price, photo, Add button |
-| `CartSidebar` | Right panel: cart items, totals, Place Order button |
+| `ItemCard` | Grid card with food photo, sold-out badge/greyout, price, Add button |
+| `CartSidebar` | Desktop right panel: cart items, totals, Place Order button |
+| `MobileCartSheet` | Mobile slide-up bottom sheet for cart (`fixed inset-0` backdrop + `rounded-t-2xl` panel) |
 | `CartRow` | Single cart line with quantity +/- |
-| `PriceRow` | Subtotal / GST / Total display |
-| `ItemModal` | Full item detail + modifier selection |
-| `CheckoutModal` | Name / phone / order type / note form |
-| `SuccessOverlay` | Full-screen success with Clover order ID |
+| `PriceRow` | Subtotal / GST / Promo / Total display |
+| `ItemModal` | Full item detail + modifier selection; full-screen on mobile |
+| `CheckoutModal` | Name / phone / order type / note / promo code → redirects to Clover Hosted Checkout |
+| `SuccessOverlay` | Full-screen success: total paid + optional savings banner |
 | `SkeletonGrid` | Loading placeholder cards |
 | `EmptyState` | "No items found" state |
-| `Overlay` | Backdrop for modals |
+| `Overlay` | `fixed inset-0` backdrop for modals |
 
 ### Cart State
 
@@ -228,16 +248,30 @@ Browser → GET /store-api/menu
   → React renders category grid + item cards
 
 User adds items, opens modal, picks modifiers
-User opens cart, clicks "Place Order"
-User fills checkout form, clicks "Confirm Order"
+User opens cart (sidebar on desktop; FAB → bottom sheet on mobile)
+User clicks "Place Order" → fills name/phone/type/note
+User optionally enters promo code → validated against /discounts list
+User clicks "Pay Now"
 
-Browser → POST /store-api/orders { items, order_type, name, phone }
-  → Caddy → store-api:8766 /orders
-  → store-api creates Clover order
-  → posts line_items (one per unit) + modifications
-  → returns { order_id, total_display }
-  → React shows success overlay with order ID
-  → Order appears in Clover POS dashboard immediately
+Browser → POST /store-api/checkout { items, order_type, name, phone, discount_code? }
+  → Caddy → store-api:8766 /checkout
+  → store-api validates discount (if any), builds Hosted Checkout payload
+  → POST https://api.clover.com/invoicingcheckoutservice/v1/checkouts
+  → returns { checkout_url, session_id, discount_amount, discount_name }
+
+Frontend saves pendingOrder to sessionStorage
+window.location.href = checkout_url  (navigates away to Clover payment page)
+
+Customer fills card details on Clover-hosted page → payment processed
+
+Clover redirects → voice.bizbull.ai?payment=success
+
+Frontend on mount:
+  → reads ?payment=success query param
+  → reads pendingOrder from sessionStorage
+  → dispatches CLEAR to cart
+  → shows SuccessOverlay: total paid + savings banner
+  → Order appears in Clover POS dashboard / KDS immediately
 ```
 
 ---
@@ -245,10 +279,11 @@ Browser → POST /store-api/orders { items, order_type, name, phone }
 ## Clover POS Side Effects
 
 When an order is placed via the Browse Store:
-- A new order appears in the Clover merchant dashboard under "Orders"
+- Payment is processed by Clover's Hosted Checkout before the order lands in the dashboard
+- A new order appears in the Clover merchant dashboard under "Orders" in `paid` state
 - If a Kitchen Display System (KDS) is set up on Clover, the order appears there
-- The order is in `open` + `unpaid` state (no payment taken)
 - Staff can see all items and modifiers exactly as selected
+- If a discount was applied, Clover records it against the order
 
 ---
 
@@ -274,6 +309,7 @@ store-api:
     - CLOVER_BASE_URL=${CLOVER_BASE_URL}
     - CLOVER_MERCHANT_ID=${CLOVER_MERCHANT_ID}
     - CLOVER_ACCESS_TOKEN=${CLOVER_ACCESS_TOKEN}
+    - FRONTEND_URL=${FRONTEND_URL:-https://voice.bizbull.ai}
   restart: unless-stopped
 ```
 
@@ -298,22 +334,19 @@ server: {
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Clover payment (Hosted Checkout) | Not started | Need Clover production access first |
-| Switch `CLOVER_BASE_URL` to production | Not done | Will do after purchasing production access |
-| Order status polling / confirmation | Not started | `GET /orders/{id}` endpoint exists but not used in UI |
-| Item images | Partial | Clover items have `imageUrl` field; store-api passes it through; frontend renders if present |
-| Inventory/availability check | Not started | Could check `available: false` on Clover items and grey them out |
+| Switch `CLOVER_BASE_URL` to production | Not done | Change env var + redeploy store-api; see deployment section |
+| Order status polling in UI | Not started | `GET /orders/{id}` endpoint exists but not used in UI |
+| `book_table` tool for Sierra (AI tab) | Not started | Table reservation intent in voice agent |
 
 ---
 
 ## Environment Variables
 
-Only three env vars are needed for store-api:
-
 ```env
 CLOVER_BASE_URL=https://apisandbox.dev.clover.com   # switch to https://api.clover.com for production
 CLOVER_MERCHANT_ID=your_merchant_id
 CLOVER_ACCESS_TOKEN=your_access_token
+FRONTEND_URL=https://voice.bizbull.ai               # Hosted Checkout redirect base URL
 ```
 
-These are the same credentials used by `voice-server`. Both services share the same Clover merchant account.
+`CLOVER_BASE_URL` and `CLOVER_ACCESS_TOKEN` are shared with `voice-server` (same Clover merchant account). `FRONTEND_URL` is store-api-specific — used to build the `?payment=success` / `?payment=cancelled` redirect URLs sent to Clover Hosted Checkout.
