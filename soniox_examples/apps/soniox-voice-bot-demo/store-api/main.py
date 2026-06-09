@@ -36,13 +36,7 @@ CLOVER_ECOM_KEY: str | None = os.environ.get("CLOVER_ECOM_KEY") or None
 
 BASE              = f"{CLOVER_BASE_URL}/v3/merchants/{CLOVER_MERCHANT_ID}"
 PAKMS_URL         = f"{CLOVER_BASE_URL}/pakms/apikey"
-
-# Hosted Checkout uses a separate domain from the REST API
-CHECKOUT_ENDPOINT = (
-    "https://checkout.sandbox.dev.clover.com/v1/orders"
-    if "sandbox" in CLOVER_BASE_URL
-    else "https://checkout.clover.com/v1/orders"
-)
+CHECKOUT_ENDPOINT = f"{CLOVER_BASE_URL}/invoicingcheckoutservice/v1/checkouts"
 
 
 def _headers() -> dict[str, str]:
@@ -53,11 +47,15 @@ def _headers() -> dict[str, str]:
 
 
 def _ecom_headers() -> dict[str, str]:
-    """Headers for the Hosted Checkout / PAKMS ecommerce endpoints."""
+    """Headers for the Hosted Checkout endpoint.
+    Requires X-Clover-Merchant-Id per Clover docs — merchant is NOT in the request body.
+    """
     key = CLOVER_ECOM_KEY or CLOVER_ACCESS_TOKEN
     return {
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-Clover-Merchant-Id": CLOVER_MERCHANT_ID,
     }
 
 
@@ -449,21 +447,17 @@ async def create_checkout(req: CheckoutRequest):
         parts.append(req.note)
 
     # ── Call Clover Hosted Checkout API ───────────────────────────────────────
+    # merchant is identified via X-Clover-Merchant-Id header, NOT in the body
     customer_parts = req.customer_name.split(" ", 1)
     payload = {
-        "merchant": {"id": CLOVER_MERCHANT_ID},
-        "shoppingCart": {
-            "lineItems": line_items,
-            "note":      " | ".join(parts),
-        },
         "customer": {
             "firstName":   customer_parts[0] if customer_parts else "",
             "lastName":    customer_parts[1] if len(customer_parts) > 1 else "",
             "phoneNumber": req.customer_phone or "",
         },
-        "redirectUrls": {
-            "success": f"{FRONTEND_URL}?payment=success",
-            "failure": f"{FRONTEND_URL}?payment=cancelled",
+        "shoppingCart": {
+            "lineItems": line_items,
+            "note":      " | ".join(parts),
         },
     }
 
