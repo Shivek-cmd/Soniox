@@ -309,6 +309,7 @@ store-api:
     - CLOVER_BASE_URL=${CLOVER_BASE_URL}
     - CLOVER_MERCHANT_ID=${CLOVER_MERCHANT_ID}
     - CLOVER_ACCESS_TOKEN=${CLOVER_ACCESS_TOKEN}
+    - CLOVER_ECOM_KEY=${CLOVER_ECOM_KEY:-}
     - FRONTEND_URL=${FRONTEND_URL:-https://voice.bizbull.ai}
   restart: unless-stopped
 ```
@@ -346,7 +347,16 @@ server: {
 CLOVER_BASE_URL=https://apisandbox.dev.clover.com   # switch to https://api.clover.com for production
 CLOVER_MERCHANT_ID=your_merchant_id
 CLOVER_ACCESS_TOKEN=your_access_token
+CLOVER_ECOM_KEY=your_hosted_checkout_private_token  # separate from CLOVER_ACCESS_TOKEN
 FRONTEND_URL=https://voice.bizbull.ai               # Hosted Checkout redirect base URL
 ```
 
-`CLOVER_BASE_URL` and `CLOVER_ACCESS_TOKEN` are shared with `voice-server` (same Clover merchant account). `FRONTEND_URL` is store-api-specific — used to build the `?payment=success` / `?payment=cancelled` redirect URLs sent to Clover Hosted Checkout.
+`CLOVER_BASE_URL`, `CLOVER_MERCHANT_ID`, and `CLOVER_ACCESS_TOKEN` are shared with `voice-server`. `FRONTEND_URL` is store-api-specific.
+
+**How to get `CLOVER_ECOM_KEY`:**
+1. Log into the Clover merchant dashboard (sandbox or production)
+2. Go to **Account & Setup → Ecommerce API Tokens**
+3. Click **Create new token** → select integration type **"Hosted checkout"**
+4. Copy the **Private token** value — that is your `CLOVER_ECOM_KEY`
+
+On startup, store-api also tries `GET /pakms/apikey` to fetch this key automatically. If PAKMS returns 404 (ecommerce not fully enabled on the account), it logs an error and the manually-set `CLOVER_ECOM_KEY` is used instead. Setting it manually in `.env` is more reliable.
