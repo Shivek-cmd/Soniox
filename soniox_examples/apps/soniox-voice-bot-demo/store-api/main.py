@@ -468,23 +468,19 @@ async def create_checkout(req: CheckoutRequest):
     }
 
     async with httpx.AsyncClient() as client:
+        log.info("checkout request", endpoint=CHECKOUT_ENDPOINT, merchant=CLOVER_MERCHANT_ID,
+                 ecom_key_prefix=(CLOVER_ECOM_KEY or "")[:8])
         resp = await client.post(
             CHECKOUT_ENDPOINT,
             json=payload,
             headers=_ecom_headers(),
             timeout=15.0,
         )
-        if resp.status_code == 401:
-            raise HTTPException(
-                status.HTTP_503_SERVICE_UNAVAILABLE,
-                "Clover ecom auth error — PAKMS key invalid or not fetched; set CLOVER_ECOM_KEY in .env",
-            )
+        log.info("checkout response", status=resp.status_code, body=resp.text[:500])
         if not resp.is_success:
-            body = resp.text
-            log.error("hosted checkout failed", status=resp.status_code, body=body)
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
-                f"Clover checkout error ({resp.status_code}): {body[:200]}",
+                f"Clover checkout error {resp.status_code}: {resp.text[:300]}",
             )
         data = resp.json()
 
