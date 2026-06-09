@@ -51,6 +51,7 @@ services:
       - CLOVER_BASE_URL=${CLOVER_BASE_URL}
       - CLOVER_MERCHANT_ID=${CLOVER_MERCHANT_ID}
       - CLOVER_ACCESS_TOKEN=${CLOVER_ACCESS_TOKEN}
+      - FRONTEND_URL=${FRONTEND_URL:-https://voice.bizbull.ai}
     restart: unless-stopped
 
   frontend:

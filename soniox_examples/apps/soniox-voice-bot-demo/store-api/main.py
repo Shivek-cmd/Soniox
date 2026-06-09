@@ -28,8 +28,10 @@ log = structlog.get_logger()
 CLOVER_BASE_URL     = os.environ["CLOVER_BASE_URL"].rstrip("/")
 CLOVER_MERCHANT_ID  = os.environ["CLOVER_MERCHANT_ID"]
 CLOVER_ACCESS_TOKEN = os.environ["CLOVER_ACCESS_TOKEN"]
+FRONTEND_URL        = os.environ.get("FRONTEND_URL", "https://voice.bizbull.ai").rstrip("/")
 
-BASE = f"{CLOVER_BASE_URL}/v3/merchants/{CLOVER_MERCHANT_ID}"
+BASE             = f"{CLOVER_BASE_URL}/v3/merchants/{CLOVER_MERCHANT_ID}"
+CHECKOUT_ENDPOINT = f"{CLOVER_BASE_URL}/invoicingcheckoutservice/v1/checkouts"
 
 
 def _headers() -> dict[str, str]:
@@ -320,6 +322,141 @@ async def create_order(req: PlaceOrderRequest):
         response["discount_display"] = f"-${discount_amount / 100:.2f}"
         response["discount_name"]    = discount_name
     return response
+
+
+# ── POST /checkout ────────────────────────────────────────────────────────────
+
+class CheckoutRequest(BaseModel):
+    items:          list[OrderLineItem]
+    order_type:     str = "pickup"
+    customer_name:  str = ""
+    customer_phone: str = ""
+    note:           str = ""
+    discount_code:  str | None = None
+
+
+@app.post("/checkout", status_code=201)
+async def create_checkout(req: CheckoutRequest):
+    """
+    Creates a Clover Hosted Checkout session for card payment.
+    Returns { checkout_url, session_id }.
+    Frontend redirects the customer to checkout_url; Clover handles card entry.
+    On success Clover redirects to FRONTEND_URL?payment=success.
+    On cancel  Clover redirects to FRONTEND_URL?payment=cancelled.
+
+    Test card (Clover sandbox): 4111 1111 1111 1111  exp: any future  cvv: any
+    """
+    if not req.items:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cart is empty")
+
+    # ── Discount lookup ───────────────────────────────────────────────────────
+    discount_amount = 0
+    discount_label: str | None = None
+    if req.discount_code:
+        async with httpx.AsyncClient() as client:
+            disc_data = await _get(client, "discounts", limit=200)
+        matched = next(
+            (d for d in disc_data.get("elements", [])
+             if d.get("name", "").strip().upper() == req.discount_code.strip().upper()),
+            None,
+        )
+        if not matched:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Promo code '{req.discount_code}' is not valid.",
+            )
+
+        subtotal = sum(li.price * li.quantity for li in req.items)
+        amt      = matched.get("amount", 0)
+        pct_raw  = matched.get("percentage", 0)
+
+        if amt > 0:
+            # Fixed-amount discount (cents)
+            discount_amount = min(amt, subtotal)
+        elif pct_raw > 0:
+            # Clover stores percentage as integer; guard for both plain (10) and
+            # basis-point (100000) formats used in different SDK versions.
+            actual_pct = pct_raw / 10000.0 if pct_raw > 100 else float(pct_raw)
+            discount_amount = round(subtotal * actual_pct / 100)
+
+        discount_label = matched.get("name")
+        log.info("checkout discount resolved", code=discount_label, discount_cents=discount_amount)
+
+    # ── Build Hosted Checkout line items ──────────────────────────────────────
+    line_items: list[dict] = []
+    for li in req.items:
+        entry: dict = {
+            "name":    li.name,
+            "unitQty": li.quantity,
+            "price":   li.price,   # unit price in cents
+        }
+        if li.note:
+            entry["note"] = li.note
+        line_items.append(entry)
+
+    if discount_amount > 0:
+        line_items.append({
+            "name":    f"Discount: {discount_label}",
+            "unitQty": 1,
+            "price":   -discount_amount,
+        })
+
+    # ── Build order note ──────────────────────────────────────────────────────
+    parts = [f"Online Order — {req.order_type.replace('_', ' ').title()}"]
+    if req.customer_name:
+        parts.append(f"Name: {req.customer_name}")
+    if req.customer_phone:
+        parts.append(f"Phone: {req.customer_phone}")
+    if req.note:
+        parts.append(req.note)
+
+    # ── Call Clover Hosted Checkout API ───────────────────────────────────────
+    customer_parts = req.customer_name.split(" ", 1)
+    payload = {
+        "merchant": {"id": CLOVER_MERCHANT_ID},
+        "shoppingCart": {
+            "lineItems": line_items,
+            "note":      " | ".join(parts),
+        },
+        "customer": {
+            "firstName":   customer_parts[0] if customer_parts else "",
+            "lastName":    customer_parts[1] if len(customer_parts) > 1 else "",
+            "phoneNumber": req.customer_phone or "",
+        },
+        "redirectUrls": {
+            "success": f"{FRONTEND_URL}?payment=success",
+            "failure": f"{FRONTEND_URL}?payment=cancelled",
+        },
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            CHECKOUT_ENDPOINT,
+            json=payload,
+            headers=_headers(),
+            timeout=15.0,
+        )
+        if resp.status_code == 401:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Clover auth error — check CLOVER_ACCESS_TOKEN")
+        if not resp.is_success:
+            body = resp.text
+            log.error("hosted checkout failed", status=resp.status_code, body=body)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                f"Clover checkout error ({resp.status_code}): {body[:200]}",
+            )
+        data = resp.json()
+
+    session_id   = data.get("checkoutSessionId") or data.get("id", "")
+    checkout_url = data.get("href", "")
+    log.info("hosted checkout created", session_id=session_id, customer=req.customer_name)
+
+    return {
+        "checkout_url": checkout_url,
+        "session_id":   session_id,
+        "discount_amount": discount_amount,
+        "discount_name":   discount_label,
+    }
 
 
 # ── GET /orders/{order_id} ────────────────────────────────────────────────────

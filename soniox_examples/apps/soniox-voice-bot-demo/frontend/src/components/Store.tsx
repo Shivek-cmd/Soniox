@@ -186,6 +186,33 @@ export function Store() {
 
   useEffect(() => { loadMenu(); }, []);
 
+  // Handle return from Clover Hosted Checkout redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    if (!payment) return;
+
+    // Remove query params from browser URL immediately
+    window.history.replaceState({}, "", window.location.pathname);
+
+    if (payment === "success") {
+      dispatch({ type: "CLEAR" });
+      try {
+        const saved = sessionStorage.getItem("pendingOrder");
+        if (saved) {
+          const order = JSON.parse(saved) as { session_id: string; total: number; discount_amount?: number; discount_name?: string };
+          sessionStorage.removeItem("pendingOrder");
+          setConfirmedOrder({ order_id: order.session_id, total: order.total, discount_amount: order.discount_amount, discount_name: order.discount_name });
+        } else {
+          setConfirmedOrder({ order_id: "—", total: 0 });
+        }
+      } catch {
+        setConfirmedOrder({ order_id: "—", total: 0 });
+      }
+    }
+    // payment=cancelled: cart is still intact (we don't clear it until redirect), just resume browsing
+  }, []);
+
   async function loadMenu() {
     try {
       const resp = await fetch(`${STORE_API}/menu`, {
@@ -418,10 +445,6 @@ export function Store() {
           total={cartTotal}
           isMobile={isMobile}
           onClose={() => setShowCheckout(false)}
-          onConfirmed={order => {
-            setConfirmedOrder(order);
-            dispatch({ type: "CLEAR" });
-          }}
         />
       )}
 
@@ -1140,12 +1163,11 @@ function ItemModal({
 interface DiscountOption { id: string; name: string; }
 
 function CheckoutModal({
-  cart, total, onClose, onConfirmed, isMobile,
+  cart, total, onClose, isMobile,
 }: {
   cart: CartEntry[];
   total: number;
   onClose: () => void;
-  onConfirmed: (order: { order_id: string; total: number; discount_amount?: number; discount_name?: string }) => void;
   isMobile: boolean;
 }) {
   const [name,      setName]      = useState("");
@@ -1195,7 +1217,7 @@ function CheckoutModal({
   const gst   = Math.round(total * 0.05);
   const grand = total + gst;
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
+  // ── Submit → Clover Hosted Checkout redirect ──────────────────────────────
   async function confirm() {
     if (!name.trim()) { setError("Please enter your name."); return; }
     setLoading(true); setError(null);
@@ -1216,7 +1238,7 @@ function CheckoutModal({
       };
       if (appliedDiscount) body.discount_code = appliedDiscount.name;
 
-      const resp = await fetch(`${STORE_API}/orders`, {
+      const resp = await fetch(`${STORE_API}/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1226,17 +1248,22 @@ function CheckoutModal({
         throw new Error((payload as any).detail ?? `Server error (${resp.status})`);
       }
       const data = await resp.json();
-      onConfirmed({
-        order_id:        data.order_id,
-        total:           data.total ?? grand,
+
+      // Save order summary so we can show it after the redirect returns
+      sessionStorage.setItem("pendingOrder", JSON.stringify({
+        session_id:      data.session_id,
+        total:           grand - (data.discount_amount ?? 0),
         discount_amount: data.discount_amount,
         discount_name:   data.discount_name,
-      });
+      }));
+
+      // Redirect to Clover's hosted payment page
+      window.location.href = data.checkout_url;
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to place order. Please try again.");
-    } finally {
       setLoading(false);
+      setError(e instanceof Error ? e.message : "Failed to create checkout. Please try again.");
     }
+    // NOTE: don't setLoading(false) on success — page is navigating away
   }
 
   const panelStyle: React.CSSProperties = isMobile
