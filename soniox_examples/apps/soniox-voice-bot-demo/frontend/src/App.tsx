@@ -17,8 +17,8 @@ function useIsMobile(breakpoint = 640) {
 
 function useTheme(): [Theme, () => void] {
   const [theme, setTheme] = useState<Theme>(() => {
-    try { return (localStorage.getItem("theme") as Theme) || "dark"; }
-    catch { return "dark"; }
+    try { return (localStorage.getItem("theme") as Theme) || "light"; }
+    catch { return "light"; }
   });
 
   useEffect(() => {
@@ -84,20 +84,7 @@ function App() {
 
         {/* Right side: theme toggle + online indicator */}
         <div className="ml-auto flex items-center gap-3">
-          <button
-            onClick={toggleTheme}
-            className="flex items-center justify-center rounded-lg transition-all duration-200 active:scale-90"
-            style={{
-              width: 32,
-              height: 32,
-              background: "var(--surface-raised)",
-              border: "1px solid var(--border)",
-              color: "var(--text-muted)",
-            }}
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {theme === "dark" ? <SunIcon size={14} /> : <MoonIcon size={14} />}
-          </button>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
 
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
@@ -198,6 +185,58 @@ function MobileNavBtn({
     >
       {icon}
       <span className="text-xs font-semibold">{label}</span>
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Theme toggle slider
+// ─────────────────────────────────────────────
+function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
+  const isLight = theme === "light";
+  return (
+    <button
+      onClick={onToggle}
+      aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
+      style={{
+        position: "relative",
+        width: 52,
+        height: 26,
+        borderRadius: 13,
+        border: "none",
+        background: isLight
+          ? "linear-gradient(135deg, #fcd34d 0%, #f59e0b 100%)"
+          : "linear-gradient(135deg, #1e1e2e 0%, #0f0f1a 100%)",
+        cursor: "pointer",
+        padding: 0,
+        flexShrink: 0,
+        outline: "none",
+        boxShadow: isLight
+          ? "0 0 0 1.5px rgba(245,158,11,0.35), 0 2px 8px rgba(245,158,11,0.15)"
+          : "0 0 0 1.5px rgba(255,255,255,0.07), 0 2px 8px rgba(0,0,0,0.4)",
+        transition: "background 0.35s ease, box-shadow 0.35s ease",
+      }}
+    >
+      {/* sliding thumb */}
+      <span
+        style={{
+          position: "absolute",
+          top: 3,
+          left: isLight ? 3 : 29,
+          width: 20,
+          height: 20,
+          borderRadius: "50%",
+          background: "#ffffff",
+          boxShadow: "0 1px 5px rgba(0,0,0,0.28)",
+          transition: "left 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: isLight ? "#f59e0b" : "#818cf8",
+        }}
+      >
+        {isLight ? <SunIcon size={11} /> : <MoonIcon size={11} />}
+      </span>
     </button>
   );
 }
