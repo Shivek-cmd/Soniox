@@ -740,7 +740,7 @@ function MobileCartSheet({
   return (
     <div
       className="fixed inset-0 z-50"
-      style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+      style={{ background: "var(--overlay-bg)", backdropFilter: "blur(4px)" }}
       onClick={onClose}
     >
       <div
@@ -988,7 +988,7 @@ function ItemModal({
         background: "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: 16,
-        boxShadow: "0 24px 80px rgba(0,0,0,0.75)",
+        boxShadow: "var(--shadow)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -1283,7 +1283,7 @@ function CheckoutModal({
         background: "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: 16,
-        boxShadow: "0 24px 80px rgba(0,0,0,0.75)",
+        boxShadow: "var(--shadow)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -1670,7 +1670,7 @@ function Overlay({
   return (
     <div
       className={`fixed inset-0 z-50 flex ${isMobile ? "items-stretch p-0" : "items-center justify-center p-4"}`}
-      style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)" }}
+      style={{ background: "var(--overlay-bg)", backdropFilter: "blur(6px)" }}
       onClick={onClose}
     >
       {children}
