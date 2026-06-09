@@ -31,7 +31,10 @@ function useTheme(): [Theme, () => void] {
 }
 
 function App() {
-  const [tab, setTab] = useState<Tab>("ai");
+  const [tab, setTab] = useState<Tab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("payment") ? "store" : "ai";
+  });
   const isMobile = useIsMobile();
   const [theme, toggleTheme] = useTheme();
 
