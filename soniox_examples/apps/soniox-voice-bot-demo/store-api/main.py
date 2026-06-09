@@ -35,8 +35,14 @@ FRONTEND_URL        = os.environ.get("FRONTEND_URL", "https://voice.bizbull.ai")
 CLOVER_ECOM_KEY: str | None = os.environ.get("CLOVER_ECOM_KEY") or None
 
 BASE              = f"{CLOVER_BASE_URL}/v3/merchants/{CLOVER_MERCHANT_ID}"
-CHECKOUT_ENDPOINT = f"{CLOVER_BASE_URL}/invoicingcheckoutservice/v1/checkouts"
 PAKMS_URL         = f"{CLOVER_BASE_URL}/pakms/apikey"
+
+# Hosted Checkout uses a separate domain from the REST API
+CHECKOUT_ENDPOINT = (
+    "https://checkout.sandbox.dev.clover.com/v1/orders"
+    if "sandbox" in CLOVER_BASE_URL
+    else "https://checkout.clover.com/v1/orders"
+)
 
 
 def _headers() -> dict[str, str]:
