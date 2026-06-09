@@ -1160,7 +1160,7 @@ function ItemModal({
 // Checkout modal
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface DiscountOption { id: string; name: string; }
+interface DiscountOption { id: string; name: string; amount?: number; percentage?: number; }
 
 function CheckoutModal({
   cart, total, onClose, isMobile,
@@ -1211,11 +1211,16 @@ function CheckoutModal({
   }
 
   // ── Pricing ────────────────────────────────────────────────────────────────
-  // We don't know the exact discount amount until the server applies it in Clover,
-  // so we show the subtotal line with a "Discount applied" notice. The confirmed
-  // success overlay shows the actual savings returned by the API.
-  const gst   = Math.round(total * 0.05);
-  const grand = total + gst;
+  const discountPreview = appliedDiscount
+    ? (appliedDiscount.amount
+        ? Math.min(appliedDiscount.amount, total)
+        : appliedDiscount.percentage
+          ? Math.round(total * appliedDiscount.percentage / 100)
+          : 0)
+    : 0;
+  const discountedSubtotal = total - discountPreview;
+  const gst   = Math.round(discountedSubtotal * 0.05);
+  const grand = discountedSubtotal + gst;
 
   // ── Submit → Clover Hosted Checkout redirect ──────────────────────────────
   async function confirm() {
@@ -1482,10 +1487,10 @@ function CheckoutModal({
                   <span style={{ color: "var(--text-muted)" }}>Subtotal</span>
                   <span style={{ color: "var(--text)" }}>{cad(total)}</span>
                 </div>
-                {appliedDiscount && (
+                {discountPreview > 0 && (
                   <div className="flex justify-between text-xs">
-                    <span style={{ color: "#22c55e" }}>Promo: {appliedDiscount.name}</span>
-                    <span className="font-semibold" style={{ color: "#22c55e" }}>Applied ✓</span>
+                    <span style={{ color: "#22c55e" }}>Promo: {appliedDiscount!.name}</span>
+                    <span className="font-semibold" style={{ color: "#22c55e" }}>-{cad(discountPreview)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xs">
@@ -1497,14 +1502,7 @@ function CheckoutModal({
                   style={{ borderColor: "var(--border)" }}
                 >
                   <span style={{ color: "var(--text)" }}>Total</span>
-                  <span style={{ color: "var(--accent)" }}>
-                    {cad(grand)}
-                    {appliedDiscount && (
-                      <span className="text-xs font-normal ml-1" style={{ color: "var(--text-dim)" }}>
-                        (before discount)
-                      </span>
-                    )}
-                  </span>
+                  <span style={{ color: "var(--accent)" }}>{cad(grand)}</span>
                 </div>
               </div>
             </div>

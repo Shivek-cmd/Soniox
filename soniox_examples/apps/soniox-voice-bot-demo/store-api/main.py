@@ -228,11 +228,17 @@ async def get_discounts():
     async with httpx.AsyncClient() as client:
         data = await _get(client, "discounts", limit=200)
 
-    discounts = [
-        {"id": d["id"], "name": d.get("name", "").strip()}
-        for d in data.get("elements", [])
-        if d.get("name", "").strip()
-    ]
+    discounts = []
+    for d in data.get("elements", []):
+        name = d.get("name", "").strip()
+        if not name:
+            continue
+        entry: dict = {"id": d["id"], "name": name}
+        if d.get("amount"):
+            entry["amount"] = abs(d["amount"])          # Clover stores as negative cents
+        if d.get("percentage"):
+            entry["percentage"] = d["percentage"]       # integer, e.g. 10 = 10%
+        discounts.append(entry)
     return {"discounts": discounts}
 
 
