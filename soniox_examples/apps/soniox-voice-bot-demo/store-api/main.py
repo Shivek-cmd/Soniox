@@ -64,11 +64,19 @@ async def lifespan(_: FastAPI):
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(PAKMS_URL, headers=_headers(), timeout=10.0)
-                resp.raise_for_status()
-                CLOVER_ECOM_KEY = resp.json()["apiAccessKey"]
-            log.info("ecom key fetched from PAKMS", key_prefix=CLOVER_ECOM_KEY[:8] + "...")
+            if resp.is_success:
+                CLOVER_ECOM_KEY = resp.json().get("apiAccessKey")
+                log.info("ecom key fetched from PAKMS", key_prefix=(CLOVER_ECOM_KEY or "")[:8] + "...")
+            else:
+                log.error(
+                    "PAKMS key fetch failed — Hosted Checkout will NOT work. "
+                    "Get the key from Clover dashboard and set CLOVER_ECOM_KEY in .env",
+                    pakms_url=PAKMS_URL,
+                    status=resp.status_code,
+                    body=resp.text[:400],
+                )
         except Exception as exc:
-            log.warning("could not fetch PAKMS ecom key — checkout will use OAuth token", error=str(exc))
+            log.error("PAKMS request failed", pakms_url=PAKMS_URL, error=str(exc))
     log.info("store-api started", merchant_id=CLOVER_MERCHANT_ID, base=CLOVER_BASE_URL)
     yield
     log.info("store-api stopped")
