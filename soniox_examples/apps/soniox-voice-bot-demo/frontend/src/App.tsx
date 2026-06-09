@@ -33,8 +33,14 @@ function useTheme(): [Theme, () => void] {
 function App() {
   const [tab, setTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("payment") ? "store" : "ai";
+    if (params.get("payment")) return "store";
+    try { return (localStorage.getItem("lastTab") as Tab) || "ai"; }
+    catch { return "ai"; }
   });
+
+  useEffect(() => {
+    try { localStorage.setItem("lastTab", tab); } catch { /* */ }
+  }, [tab]);
   const isMobile = useIsMobile();
   const [theme, toggleTheme] = useTheme();
 
