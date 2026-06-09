@@ -121,15 +121,44 @@ Request body (same shape as `POST /orders` plus optional `discount_code`):
 
 What happens server-side:
 1. If `discount_code` provided: validates it against `GET /v3/merchants/{mId}/discounts`
-2. Builds `line_items` list for Clover's Hosted Checkout payload
-3. If discount valid: appends a negative line item for the discount amount; computes `discount_amount` from Clover's percentage field (guards for both integer `%` and basis-point format)
-4. Calls `POST /invoicingcheckoutservice/v1/checkouts` with merchant, shoppingCart, customer, redirectUrls
-5. Returns redirect URL and session info
+2. Builds `lineItems` list; appends a negative line item if discount applies
+3. POSTs to Clover Hosted Checkout API (see below) with `shoppingCart`, `customer`, `redirectUrls`
+4. Returns redirect URL and session info
 
-Returns:
+**Clover Hosted Checkout API call:**
+```
+POST {CLOVER_BASE_URL}/invoicingcheckoutservice/v1/checkouts
+Authorization: Bearer {CLOVER_ECOM_KEY}
+X-Clover-Merchant-Id: {CLOVER_MERCHANT_ID}
+Content-Type: application/json
+Accept: application/json
+```
+Body (merchant is NOT in the body — identified via header):
 ```json
 {
-  "checkout_url": "https://checkout.clover.com/...",
+  "customer": { "firstName": "Raj", "lastName": "Singh", "phoneNumber": "7801234567" },
+  "shoppingCart": { "lineItems": [...], "note": "Online Order — Takeout | Name: Raj" },
+  "redirectUrls": {
+    "success": "https://voice.bizbull.ai?payment=success",
+    "failure": "https://voice.bizbull.ai?payment=cancelled"
+  }
+}
+```
+Clover response:
+```json
+{
+  "href": "https://sandbox.dev.clover.com/pay-checkout/{sessionId}?mode=checkout",
+  "checkoutSessionId": "...",
+  "createdTime": "...",
+  "expirationTime": "..."
+}
+```
+Sessions expire **15 minutes** after creation.
+
+store-api returns to frontend:
+```json
+{
+  "checkout_url": "https://sandbox.dev.clover.com/pay-checkout/...",
   "session_id": "SESSION_ID",
   "discount_amount": 75,
   "discount_name": "SUMMER10"
@@ -354,9 +383,17 @@ FRONTEND_URL=https://voice.bizbull.ai               # Hosted Checkout redirect b
 `CLOVER_BASE_URL`, `CLOVER_MERCHANT_ID`, and `CLOVER_ACCESS_TOKEN` are shared with `voice-server`. `FRONTEND_URL` is store-api-specific.
 
 **How to get `CLOVER_ECOM_KEY`:**
-1. Log into the Clover merchant dashboard (sandbox or production)
-2. Go to **Account & Setup → Ecommerce API Tokens**
+1. Log into the **sandbox** Clover merchant dashboard: [sandbox.dev.clover.com](https://sandbox.dev.clover.com) (for production: clover.com)
+2. Open your merchant → **Account & Setup → Ecommerce API Tokens**
 3. Click **Create new token** → select integration type **"Hosted checkout"**
 4. Copy the **Private token** value — that is your `CLOVER_ECOM_KEY`
 
-On startup, store-api also tries `GET /pakms/apikey` to fetch this key automatically. If PAKMS returns 404 (ecommerce not fully enabled on the account), it logs an error and the manually-set `CLOVER_ECOM_KEY` is used instead. Setting it manually in `.env` is more reliable.
+> **Important:** The token MUST be created from the **same environment** as `CLOVER_BASE_URL`. A production token will not work against the sandbox API and vice versa.
+
+On startup, store-api attempts `GET /pakms/apikey` to fetch this key automatically. In practice PAKMS returns 404 for most sandbox accounts, so **set it manually in `.env`** — that is the reliable path.
+
+After adding to `.env`, redeploy store-api only:
+```bash
+docker compose up -d --force-recreate store-api
+docker compose exec store-api env | grep CLOVER_ECOM_KEY   # verify it loaded
+```

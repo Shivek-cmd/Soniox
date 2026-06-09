@@ -118,9 +118,14 @@ CLOVER_ECOM_KEY=...                     # Hosted Checkout ecommerce token (see b
 FRONTEND_URL=https://voice.bizbull.ai   # used for Hosted Checkout redirect URLs
 ```
 
-**Payment:** Implemented via Clover Hosted Checkout redirect flow. Test card: `4111 1111 1111 1111`, any future expiry, any CVV. To switch from sandbox to production, change `CLOVER_BASE_URL` + `CLOVER_ECOM_KEY` and redeploy store-api only.
+**Payment:** Implemented via Clover Hosted Checkout redirect flow.
+- Endpoint: `POST {CLOVER_BASE_URL}/invoicingcheckoutservice/v1/checkouts`
+- Auth: `Authorization: Bearer {CLOVER_ECOM_KEY}` + `X-Clover-Merchant-Id` header (merchant is NOT in the request body)
+- On success Clover redirects to `FRONTEND_URL?payment=success`; frontend detects this on load and switches to the Store tab to show the success overlay
+- Test card: `4111 1111 1111 1111`, any future expiry, any CVV
+- To go live: replace `CLOVER_BASE_URL` with `https://api.clover.com` and create a new `CLOVER_ECOM_KEY` from the production Clover dashboard
 
-**`CLOVER_ECOM_KEY`** is a separate credential from `CLOVER_ACCESS_TOKEN`. Get it from the Clover merchant dashboard → Account & Setup → Ecommerce API Tokens → Create new token → select **"Hosted checkout"** integration type → copy the Private token. On startup, store-api also attempts `GET /pakms/apikey` to fetch it automatically, but this requires Ecommerce to be enabled on the merchant account; setting it manually in `.env` is more reliable.
+**`CLOVER_ECOM_KEY`** is a separate credential from `CLOVER_ACCESS_TOKEN`. Get it from the Clover merchant dashboard → Account & Setup → Ecommerce API Tokens → Create new token → select **"Hosted checkout"** → copy the Private token. Must be created from the **same environment** (sandbox or production) as `CLOVER_BASE_URL`. Setting manually in `.env` is more reliable than PAKMS auto-fetch (PAKMS returns 404 on most sandbox accounts).
 
 ---
 
