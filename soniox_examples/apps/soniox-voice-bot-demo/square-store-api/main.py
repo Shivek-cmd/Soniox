@@ -413,9 +413,6 @@ async def create_checkout(req: CheckoutRequest):
             "redirect_url":             f"{FRONTEND_URL}?payment=success",
             "ask_for_shipping_address": False,
         },
-        "pre_populated_data": {
-            "buyer_phone_number": req.customer_phone or "",
-        },
     }
 
     async with httpx.AsyncClient() as client:
