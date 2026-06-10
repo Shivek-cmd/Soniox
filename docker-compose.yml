@@ -21,6 +21,10 @@ services:
       - CLOVER_REFRESH_TOKEN=${CLOVER_REFRESH_TOKEN:-}
       - CLOVER_WEBHOOK_SECRET=${CLOVER_WEBHOOK_SECRET}
       - CLOVER_MENU_POLL_INTERVAL=${CLOVER_MENU_POLL_INTERVAL:-300}
+      # Square POS
+      - SQUARE_BASE_URL=${SQUARE_BASE_URL:-https://connect.squareupsandbox.com}
+      - SQUARE_ACCESS_TOKEN=${SQUARE_ACCESS_TOKEN:-}
+      - SQUARE_LOCATION_ID=${SQUARE_LOCATION_ID:-}
     restart: unless-stopped
 
   twilio-bridge:
@@ -53,16 +57,10 @@ services:
       - CLOVER_ACCESS_TOKEN=${CLOVER_ACCESS_TOKEN}
       - CLOVER_ECOM_KEY=${CLOVER_ECOM_KEY:-}
       - FRONTEND_URL=${FRONTEND_URL:-https://voice.bizbull.ai}
-    restart: unless-stopped
-
-  square-store-api:
-    build:
-      context: ./soniox_examples/apps/soniox-voice-bot-demo/square-store-api
-    environment:
+      # Square POS
       - SQUARE_BASE_URL=${SQUARE_BASE_URL:-https://connect.squareupsandbox.com}
-      - SQUARE_ACCESS_TOKEN=${SQUARE_ACCESS_TOKEN}
-      - SQUARE_LOCATION_ID=${SQUARE_LOCATION_ID}
-      - FRONTEND_URL=${SQUARE_FRONTEND_URL:-https://gurunanakbakery.bizbull.ai}
+      - SQUARE_ACCESS_TOKEN=${SQUARE_ACCESS_TOKEN:-}
+      - SQUARE_LOCATION_ID=${SQUARE_LOCATION_ID:-}
     restart: unless-stopped
 
   frontend:

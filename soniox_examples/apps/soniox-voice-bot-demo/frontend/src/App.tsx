@@ -4,6 +4,7 @@ import { Store } from "./components/Store";
 
 type Tab = "ai" | "store";
 type Theme = "dark" | "light";
+type POS = "clover" | "square";
 
 function useIsMobile(breakpoint = 640) {
   const [m, setM] = useState(() => window.innerWidth < breakpoint);
@@ -41,6 +42,15 @@ function App() {
   useEffect(() => {
     try { localStorage.setItem("lastTab", tab); } catch { /* */ }
   }, [tab]);
+  const [pos, setPos] = useState<POS>(() => {
+    try { return (localStorage.getItem("pos") as POS) || "clover"; }
+    catch { return "clover"; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem("pos", pos); } catch { /* */ }
+  }, [pos]);
+
   const isMobile = useIsMobile();
   const [theme, toggleTheme] = useTheme();
 
@@ -91,8 +101,23 @@ function App() {
           </div>
         )}
 
-        {/* Right side: theme toggle + online indicator */}
+        {/* Right side: POS selector + theme toggle + online indicator */}
         <div className="ml-auto flex items-center gap-3">
+          <select
+            value={pos}
+            onChange={e => setPos(e.target.value as POS)}
+            className="text-xs rounded-lg px-2 py-1.5 outline-none cursor-pointer"
+            style={{
+              background: "var(--surface-raised)",
+              border: "1px solid var(--border)",
+              color: "var(--text)",
+            }}
+            title="POS System"
+          >
+            <option value="clover">Clover</option>
+            <option value="square">Square</option>
+          </select>
+
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
 
           <div className="flex items-center gap-2">
@@ -109,8 +134,8 @@ function App() {
         className="flex-1 overflow-hidden"
         style={{ paddingBottom: isMobile ? 64 : 0 }}
       >
-        {tab === "ai" && <Conversation />}
-        {tab === "store" && <Store />}
+        {tab === "ai" && <Conversation pos={pos} />}
+        {tab === "store" && <Store pos={pos} />}
       </main>
 
       {/* ── Mobile bottom nav ───────────────────────────────────────── */}

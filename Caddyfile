@@ -1,24 +1,4 @@
 :80 {
-    # ── gurunanakbakery.bizbull.ai → Square store-api ─────────────────────────
-
-    @gnb_store {
-        host gurunanakbakery.bizbull.ai
-        path /store-api /store-api/*
-    }
-    handle @gnb_store {
-        uri strip_prefix /store-api
-        reverse_proxy square-store-api:8767
-    }
-
-    @gnb_frontend {
-        host gurunanakbakery.bizbull.ai
-    }
-    handle @gnb_frontend {
-        reverse_proxy frontend:80
-    }
-
-    # ── voice.bizbull.ai (Parkash Sweets — unchanged) ─────────────────────────
-
     @browser_ws path /ws
     handle @browser_ws {
         reverse_proxy voice-server:8765

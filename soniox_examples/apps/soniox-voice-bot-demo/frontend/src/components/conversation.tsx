@@ -33,7 +33,7 @@ function useIsMobile(breakpoint = 640) {
 }
 
 // ─────────────────────────────────────────────
-export function Conversation() {
+export function Conversation({ pos }: { pos: string }) {
   const ws = useRef<WebSocket | null>(null);
 
   const [lang, setLang]                     = useState("en");
@@ -65,6 +65,7 @@ export function Conversation() {
     const url = new URL(WS_URL);
     url.searchParams.append("language", lang);
     url.searchParams.append("voice", "Maya");
+    url.searchParams.append("pos", pos);
     const sock = new WebSocket(url.toString());
     ws.current = sock;
     sock.onopen  = () => { setStatus("listening"); startMicrophoneStream(); };

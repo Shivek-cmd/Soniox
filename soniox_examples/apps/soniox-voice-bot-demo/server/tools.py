@@ -9,6 +9,7 @@ from openai.types.chat import ChatCompletionFunctionToolParam
 from rapidfuzz import fuzz, process
 
 from clover import CloverError, CloverItemNotFoundError, get_client as _get_clover_client
+from square_client import SquareError, SquareItemNotFoundError
 
 # ── Load menu.json (single source of truth) ───────────────────────────────────
 
@@ -117,6 +118,7 @@ class RestaurantState:
         self.transfer_reason = ""
         self.caller_phone = caller_phone
         self.confirmed_order: dict | None = None
+        self.pos_client = None  # CloverClient | SquareClient; set in main.py handle()
 
 
 # ── Pronunciation guide injected into system prompt ───────────────────────────
@@ -168,7 +170,7 @@ def _get_pronunciation_guide(language: str) -> str:
 
 # ── System message ────────────────────────────────────────────────────────────
 
-def get_system_message(language: str, caller_phone: str = "") -> str:
+def get_system_message(language: str, caller_phone: str = "", pos_client=None) -> str:
     if caller_phone:
         phone_instruction = (
             f"The caller's phone number is already known as {caller_phone}. "
@@ -256,7 +258,7 @@ In `place_order` use ORDER count: customer wants 4 samosas → {{"name": "Aloo S
 
 ## PRICES
 
-{_get_prices_section()}
+{_get_prices_section(pos_client=pos_client)}
 
 
 ## TOOLS
@@ -273,9 +275,9 @@ Pure vegetarian restaurant — no meat, chicken, beef. Off-menu requests: apolog
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _get_prices_section() -> str:
-    """Build the ## PRICES block from Clover live cache, or fall back to static."""
-    _client = _get_clover_client()
+def _get_prices_section(pos_client=None) -> str:
+    """Build the ## PRICES block from live POS cache, or fall back to static."""
+    _client = pos_client if pos_client is not None else _get_clover_client()
     if _client is not None and _client.available and _client.menu is not None:
         all_items = _client.menu.all_items()
         by_cat: dict[str, list] = {}
@@ -316,17 +318,17 @@ def normalize_item_name(value: str) -> str:
     return ITEM_ALIASES.get(value_lower, value)
 
 
-def _lookup_price(item_name: str) -> float:
-    """Resolve item name to price using Clover cache first, then 4-level static fallback.
+def _lookup_price(item_name: str, pos_client=None) -> float:
+    """Resolve item name to price using live POS cache first, then 4-level static fallback.
 
-    0. Clover live cache            — always up to date if client is running
+    0. POS live cache (Clover or Square) — always up to date if client is running
     1. ITEM_ALIASES exact lookup    — known spelling variants
     2. Exact case-insensitive match — canonical names as-is
     3. All-tokens subset match      — handles word reorder, extra words
     4. rapidfuzz token_sort_ratio   — handles plurals, typos, STT drift
     """
-    # 0. Clover live cache (authoritative price source)
-    _client = _get_clover_client()
+    # 0. POS live cache (authoritative price source)
+    _client = pos_client if pos_client is not None else _get_clover_client()
     if _client is not None and _client.available and _client.menu is not None:
         clover_item = _client.menu.lookup(item_name)
         if clover_item is not None:
@@ -510,12 +512,12 @@ get_menu_tool_description = ChatCompletionFunctionToolParam(
 )
 
 
-async def get_menu(category: str) -> dict:
+async def get_menu(category: str, pos_client=None) -> dict:
     print(f"Running Tool: get_menu(category='{category}')")
     category_norm = normalize_menu_category(category)
 
-    # ── Clover live cache (source of truth when available) ────────────────────
-    _client = _get_clover_client()
+    # ── POS live cache (source of truth when available) ───────────────────────
+    _client = pos_client if pos_client is not None else _get_clover_client()
     if _client is not None and _client.available and _client.menu is not None:
         if category_norm == "all":
             all_items = _client.menu.all_items()
@@ -587,11 +589,11 @@ check_item_availability_tool_description = ChatCompletionFunctionToolParam(
 )
 
 
-async def check_item_availability(item_name: str) -> dict:
+async def check_item_availability(item_name: str, pos_client=None) -> dict:
     print(f"Running Tool: check_item_availability(item_name='{item_name}')")
 
-    # Clover live cache — authoritative when available
-    _client = _get_clover_client()
+    # POS live cache — authoritative when available
+    _client = pos_client if pos_client is not None else _get_clover_client()
     if _client is not None and _client.available and _client.menu is not None:
         clover_item = _client.menu.lookup(item_name)
         if clover_item is not None:
@@ -610,7 +612,7 @@ async def check_item_availability(item_name: str) -> dict:
             ),
         }
 
-    # Clover unavailable — fall back to static menu.json
+    # POS unavailable — fall back to static menu.json
     canonical_name = normalize_item_name(item_name)
     search_lower = canonical_name.strip().lower()
 
@@ -625,7 +627,7 @@ async def check_item_availability(item_name: str) -> dict:
                     "description": item.get("description", ""),
                 }
 
-    price = _lookup_price(item_name)
+    price = _lookup_price(item_name, pos_client=pos_client)
     if price:
         return {"available": True, "item": canonical_name, "price": price}
 
@@ -707,6 +709,7 @@ async def place_order(
     order_type: str = "pickup",
     delivery_address: str = "",
     special_instructions: str = "",
+    pos_client=None,
 ) -> dict:
     print(
         f"Running Tool: place_order("
@@ -727,7 +730,7 @@ async def place_order(
     not_found = []
     for item in items:
         if not item.get("price"):
-            item["price"] = _lookup_price(item["name"])
+            item["price"] = _lookup_price(item["name"], pos_client=pos_client)
         if not item.get("price"):
             not_found.append(item["name"])
 
@@ -747,12 +750,12 @@ async def place_order(
         else "10-15 minutes"
     )
 
-    # ── Create order in Clover POS ────────────────────────────────────────────
-    clover_order_id: str | None = None
-    _client = _get_clover_client()
+    # ── Create order in POS (Clover or Square) ────────────────────────────────
+    pos_order_id: str | None = None
+    _client = pos_client if pos_client is not None else _get_clover_client()
     if _client is not None and _client.available:
         try:
-            clover_order = await _client.create_order(
+            pos_order = await _client.create_order(
                 order_type=order_type,
                 items=items,
                 customer_name=customer_name,
@@ -760,9 +763,9 @@ async def place_order(
                 special_instructions=special_instructions,
                 delivery_address=delivery_address,
             )
-            clover_order_id = clover_order.id
-            print(f"Clover order created: {clover_order_id}")
-        except CloverItemNotFoundError as exc:
+            pos_order_id = pos_order.id
+            print(f"POS order created: {pos_order_id}")
+        except (CloverItemNotFoundError, SquareItemNotFoundError) as exc:
             return {
                 "success": False,
                 "error": (
@@ -770,11 +773,11 @@ async def place_order(
                     "Ask the customer to clarify the item name."
                 ),
             }
-        except CloverError as exc:
+        except (CloverError, SquareError) as exc:
             # Network/API failure — fall through to n8n-only path so order still confirms
-            print(f"Clover order creation failed (falling back to n8n): {exc}")
+            print(f"POS order creation failed (falling back to n8n): {exc}")
 
-    order_id = clover_order_id or f"PS-{datetime.now().strftime('%H%M%S')}"
+    order_id = pos_order_id or f"PS-{datetime.now().strftime('%H%M%S')}"
 
     n8n_url = os.getenv("N8N_WEBHOOK_URL", "")
     if n8n_url:
@@ -834,6 +837,12 @@ def get_tools(state: RestaurantState):
         state.tts_voice = config["tts_voice"]
         return f"Language switched to {language}. Now respond in {language}."
 
+    async def get_menu_for_pos(category: str) -> dict:
+        return await get_menu(category, pos_client=state.pos_client)
+
+    async def check_availability_for_pos(item_name: str) -> dict:
+        return await check_item_availability(item_name, pos_client=state.pos_client)
+
     async def place_order_and_notify(
         customer_name: str,
         phone_number: str,
@@ -851,6 +860,7 @@ def get_tools(state: RestaurantState):
             order_type=order_type,
             delivery_address=delivery_address,
             special_instructions=special_instructions,
+            pos_client=state.pos_client,
         )
         if result.get("success"):
             state.confirmed_order = result
@@ -859,7 +869,7 @@ def get_tools(state: RestaurantState):
     return [
         (transfer_call_tool_description, transfer_call),
         (select_language_tool_description, select_language),
-        (get_menu_tool_description, get_menu),
-        (check_item_availability_tool_description, check_item_availability),
+        (get_menu_tool_description, get_menu_for_pos),
+        (check_item_availability_tool_description, check_availability_for_pos),
         (place_order_tool_description, place_order_and_notify),
     ]

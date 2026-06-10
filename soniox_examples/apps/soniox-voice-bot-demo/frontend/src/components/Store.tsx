@@ -168,7 +168,7 @@ function getItemImage(name: string, imageUrl: string | null): string | null {
 // Main Store component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function Store() {
+export function Store({ pos }: { pos: string }) {
   const [categories, setCategories] = useState<StoreCategory[]>([]);
   const [items,      setItems]      = useState<StoreItem[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -184,7 +184,7 @@ export function Store() {
   const [cart, dispatch] = useReducer(cartReducer, []);
   const isMobile = useIsMobile();
 
-  useEffect(() => { loadMenu(); }, []);
+  useEffect(() => { loadMenu(); }, [pos]); // eslint-disable-line
 
   // Handle return from Clover Hosted Checkout redirect
   useEffect(() => {
@@ -215,7 +215,7 @@ export function Store() {
 
   async function loadMenu() {
     try {
-      const resp = await fetch(`${STORE_API}/menu`, {
+      const resp = await fetch(`${STORE_API}/menu?pos=${pos}`, {
         signal: AbortSignal.timeout(6000),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -444,6 +444,7 @@ export function Store() {
           cart={cart}
           total={cartTotal}
           isMobile={isMobile}
+          pos={pos}
           onClose={() => setShowCheckout(false)}
         />
       )}
@@ -1163,12 +1164,13 @@ function ItemModal({
 interface DiscountOption { id: string; name: string; amount?: number; percentage?: number; }
 
 function CheckoutModal({
-  cart, total, onClose, isMobile,
+  cart, total, onClose, isMobile, pos,
 }: {
   cart: CartEntry[];
   total: number;
   onClose: () => void;
   isMobile: boolean;
+  pos: string;
 }) {
   const [name,      setName]      = useState("");
   const [phone,     setPhone]     = useState("");
@@ -1185,11 +1187,11 @@ function CheckoutModal({
 
   // Fetch available discounts once when modal opens
   useEffect(() => {
-    fetch(`${STORE_API}/discounts`)
+    fetch(`${STORE_API}/discounts?pos=${pos}`)
       .then(r => r.ok ? r.json() : { discounts: [] })
       .then(d => setDiscountList(d.discounts ?? []))
       .catch(() => {});
-  }, []);
+  }, [pos]); // eslint-disable-line
 
   function applyPromo() {
     const code = promoInput.trim().toUpperCase();
@@ -1243,7 +1245,7 @@ function CheckoutModal({
       };
       if (appliedDiscount) body.discount_code = appliedDiscount.name;
 
-      const resp = await fetch(`${STORE_API}/checkout`, {
+      const resp = await fetch(`${STORE_API}/checkout?pos=${pos}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

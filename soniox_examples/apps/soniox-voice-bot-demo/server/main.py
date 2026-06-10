@@ -24,6 +24,7 @@ from processors.tts import TTSProcessor
 from processors.vad import VADProcessor
 from session import Session
 from clover import CloverClient, CloverError, get_client, set_client
+from square_client import SquareClient, SquareError
 from tools import (
     LANGUAGE_CONFIG,
     RESTAURANT_NAME,
@@ -186,6 +187,9 @@ class DynamicTTSProcessor(TTSProcessor):
             await self._send_message(TransferCallMessage(self._state.transfer_reason))
 
 
+_square_client: SquareClient | None = None
+
+
 class QueryParams(pydantic.BaseModel):
     language: str
     voice: str
@@ -197,6 +201,7 @@ class QueryParams(pydantic.BaseModel):
     audio_out_sample_rate: int = 24000
     skip_opening_greeting: bool = False
     caller_phone: str = ""
+    pos: str = "clover"
 
     @pydantic.model_validator(mode="before")
     @classmethod
@@ -245,6 +250,11 @@ async def handle(websocket: ServerConnection):
 
     state = RestaurantState(caller_phone=params.caller_phone)
 
+    if params.pos == "square" and _square_client is not None and _square_client.available:
+        state.pos_client = _square_client
+    else:
+        state.pos_client = get_client()
+
     def select_language_without_llm(language: str):
         config = LANGUAGE_CONFIG.get(language.lower(), LANGUAGE_CONFIG["english"])
         state.tts_language = config["tts_language"]
@@ -288,6 +298,7 @@ async def handle(websocket: ServerConnection):
             system_message=get_system_message(
                 "auto" if params.skip_opening_greeting else LANGUAGES_MAP[params.language],
                 caller_phone=params.caller_phone,
+                pos_client=state.pos_client,
             ),
             tools=get_tools(state),
             temperature=LLM_TEMPERATURE,
@@ -333,6 +344,8 @@ async def process_request(connection, request):
 
 
 async def main():
+    global _square_client
+
     log.info("Warming up VAD model...")
     VADProcessor.warmup()
 
@@ -344,6 +357,15 @@ async def main():
         log.critical("clover.init.failed", error=str(exc))
         raise SystemExit(1) from exc
     set_client(clover_client)
+
+    # ── Square POS init (optional — enabled when SQUARE_ACCESS_TOKEN is set) ──
+    if os.getenv("SQUARE_ACCESS_TOKEN"):
+        try:
+            _square_client = SquareClient()
+            await _square_client.init()
+        except SquareError as exc:
+            log.warning("square.init.failed", error=str(exc))
+            _square_client = None
     # ─────────────────────────────────────────────────────────────────────────
 
     log.info("Starting WebSocket server", host=WEBSOCKET_HOST, port=WEBSOCKET_PORT)
@@ -352,6 +374,8 @@ async def main():
             await server.serve_forever()
     finally:
         await clover_client.close()
+        if _square_client is not None:
+            await _square_client.close()
 
 
 if __name__ == "__main__":
