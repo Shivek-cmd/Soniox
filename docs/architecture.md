@@ -1,7 +1,9 @@
 # System Architecture
 
 This project runs a phone-based and browser-based restaurant ordering system for Parkash Sweets.
-Twilio handles phone calls. Caddy exposes the public HTTPS endpoint. The Twilio bridge converts Twilio's media stream into raw audio. The core voice server runs the AI pipeline and owns the Clover POS connection. The store-api serves the e-commerce Browse Store tab.
+Twilio handles phone calls. Caddy exposes the public HTTPS endpoint. The Twilio bridge converts Twilio's media stream into raw audio. The core voice server runs the AI pipeline and owns the POS connection. The store-api serves the e-commerce Browse Store tab.
+
+**Dual POS:** Both the AI ordering (Sierra) and Browse Store tabs support **Clover** (default) and **Square** POS, switchable via a header dropdown. All WebSocket and REST API endpoints accept `?pos=clover|square`.
 
 `soniox_examples` is tracked directly inside the main `Soniox` repo (not a submodule).
 
@@ -51,9 +53,12 @@ Raw Python WebSocket server on port 8765. Not FastAPI.
 
 Responsibilities:
 - Accepts WebSocket connections from the Twilio bridge (phone) and browser (frontend)
-- Initialises Clover POS client at startup — blocks until menu is loaded
+- Accepts `?pos=clover|square` WebSocket query param — selects POS for each session
+- Initialises Clover POS client at startup (required); initialises Square POS client if `SQUARE_ACCESS_TOKEN` is set
 - Runs the AI pipeline per session: VAD → STT → LLM → TTS
 - Exposes `GET /internal/clover-reload` for the Twilio bridge webhook relay
+
+**POS abstraction:** `square_client.py` mirrors the `CloverClient` interface. `tools.py` functions all accept `pos_client=None`. `state.pos_client` is set per WebSocket session from `?pos=` param.
 
 Key env vars:
 ```env
@@ -64,6 +69,11 @@ CLOVER_BASE_URL=https://api.clover.com
 CLOVER_MERCHANT_ID=...
 CLOVER_ACCESS_TOKEN=...
 CLOVER_WEBHOOK_SECRET=...
+CLOVER_MENU_POLL_INTERVAL=300
+# Square (optional — enables Square POS when set)
+SQUARE_BASE_URL=https://connect.squareupsandbox.com
+SQUARE_ACCESS_TOKEN=...
+SQUARE_LOCATION_ID=...
 ```
 
 ---
@@ -97,15 +107,15 @@ NGROK_URL=https://voice.bizbull.ai
 
 File: `soniox_examples/apps/soniox-voice-bot-demo/store-api/main.py`
 
-FastAPI app on port 8766. Powers the "Browse Store" tab in the React frontend.
+FastAPI app on port 8766. Powers the "Browse Store" tab in the React frontend. **All endpoints accept `?pos=clover|square` (default: clover).**
 
 Responsibilities:
-- `GET /menu` — fetches all items from Clover with categories and modifier groups, filters hidden/deleted/variable-price items, returns clean JSON
-- `GET /discounts` — returns active named discounts from Clover (`{ discounts: [{ id, name }] }`)
-- `POST /checkout` — creates a Clover Hosted Checkout session; optionally applies a named discount; returns `{ checkout_url, session_id, discount_amount, discount_name }`. Frontend redirects the customer to `checkout_url`; Clover handles card entry and redirects back to `FRONTEND_URL?payment=success` or `?payment=cancelled`.
-- `POST /orders` — creates a Clover order from the cart (used by the voice-server AI tab path; supports optional `discount_code`)
-- `GET /orders/{id}` — polls order state from Clover
-- `GET /health` — liveness probe
+- `GET /menu?pos=` — fetches menu from Clover or Square catalog; returns `{ categories, items }` with modifier groups
+- `GET /discounts?pos=` — returns active named discounts from Clover or Square catalog
+- `POST /checkout?pos=` — **Clover:** creates a Clover Hosted Checkout session; **Square:** creates a Square Payment Link; both return `{ checkout_url, ... }`. Frontend redirects to `checkout_url`; POS handles card entry and redirects back to `FRONTEND_URL?payment=success`.
+- `POST /orders?pos=` — creates an order in Clover or Square (no payment; used by voice-server AI tab path)
+- `GET /orders/{id}?pos=` — polls order state from Clover or Square
+- `GET /health` — liveness probe; returns `{ ok, clover, square, merchant_id, location_id }`
 
 Caddy strips `/store-api` prefix before forwarding, so the service receives requests at `/menu`, `/orders`, etc.
 
@@ -114,11 +124,14 @@ Key env vars:
 CLOVER_BASE_URL=https://api.clover.com
 CLOVER_MERCHANT_ID=...
 CLOVER_ACCESS_TOKEN=...
-CLOVER_ECOM_KEY=...                     # Hosted Checkout ecommerce token (see below)
-FRONTEND_URL=https://voice.bizbull.ai   # used for Hosted Checkout redirect URLs
+CLOVER_ECOM_KEY=...                     # Hosted Checkout ecommerce token
+SQUARE_BASE_URL=https://connect.squareupsandbox.com
+SQUARE_ACCESS_TOKEN=...
+SQUARE_LOCATION_ID=...
+FRONTEND_URL=https://voice.bizbull.ai   # used for checkout redirect URLs
 ```
 
-**Payment:** Implemented via Clover Hosted Checkout redirect flow.
+**Payment — Clover:** Implemented via Clover Hosted Checkout redirect flow.
 - Endpoint: `POST {CLOVER_BASE_URL}/invoicingcheckoutservice/v1/checkouts`
 - Auth: `Authorization: Bearer {CLOVER_ECOM_KEY}` + `X-Clover-Merchant-Id` header (merchant is NOT in the request body)
 - On success Clover redirects to `FRONTEND_URL?payment=success`; frontend detects this on load and switches to the Store tab to show the success overlay
@@ -135,9 +148,11 @@ File: `soniox_examples/apps/soniox-voice-bot-demo/frontend/`
 
 React + Vite app, served via nginx on port 80.
 
+**POS dropdown** in the header (persisted in localStorage) controls both tabs simultaneously — switching from Clover to Square reloads the menu in both the Store and the MenuPanel in the AI tab.
+
 Two tabs:
-- **Order with Sierra** — AI voice ordering (Sierra avatar, menu panel, live order/receipt). No transcript shown. Bottom bar has language selector + Start/End call button.
-- **Browse Store** — e-commerce store: category filter, search, item grid (food photos + sold-out greyout), cart sidebar, item modal (modifier selection), checkout modal with promo code input → redirects to Clover Hosted Checkout for payment → success overlay with savings banner on return.
+- **Order with Sierra** — AI voice ordering (Sierra avatar, menu panel, live order/receipt). MenuPanel fetches `/store-api/menu?pos=...` dynamically. Bottom bar has language selector + Start/End call button.
+- **Browse Store** — e-commerce store: category filter, search, item grid, cart sidebar, item modal (modifier selection), checkout modal with promo code input → redirects to Clover Hosted Checkout or Square Payment Link for payment → success overlay on return.
 
 **Mobile:** Fully responsive. Desktop tab switcher in header. Mobile: fixed bottom nav bar (64px); cart shown as floating amber FAB + slide-up bottom sheet; modals are full-screen. `useIsMobile(640)` hook drives layout switching.
 
@@ -297,6 +312,10 @@ CLOVER_ACCESS_TOKEN=...
 CLOVER_REFRESH_TOKEN=
 CLOVER_WEBHOOK_SECRET=...
 CLOVER_MENU_POLL_INTERVAL=300
+# Square (optional)
+SQUARE_BASE_URL=https://connect.squareupsandbox.com
+SQUARE_ACCESS_TOKEN=...
+SQUARE_LOCATION_ID=...
 ```
 
 ### twilio-bridge
@@ -321,7 +340,10 @@ CLOVER_BASE_URL=https://api.clover.com        # or https://apisandbox.dev.clover
 CLOVER_MERCHANT_ID=...
 CLOVER_ACCESS_TOKEN=...
 CLOVER_ECOM_KEY=...                           # Ecommerce API token (Hosted Checkout type) from Clover dashboard
-FRONTEND_URL=https://voice.bizbull.ai         # Hosted Checkout redirect base URL
+SQUARE_BASE_URL=https://connect.squareupsandbox.com
+SQUARE_ACCESS_TOKEN=...
+SQUARE_LOCATION_ID=...
+FRONTEND_URL=https://voice.bizbull.ai         # Checkout redirect base URL (both Clover + Square)
 ```
 
 ### frontend (build-time args only — baked into JS bundle)
@@ -376,11 +398,12 @@ docker compose up -d --force-recreate store-api
 ```text
 Caddy           = public HTTPS entrypoint, path-based routing to all 5 services
 twilio-bridge   = FastAPI: Twilio phone bridge + Clover inventory webhook relay
-voice-server    = WebSocket AI engine: VAD + STT + LLM + TTS + Clover POS client
-store-api       = FastAPI: e-commerce REST API — menu, discounts, Hosted Checkout payment
-frontend        = React UI — two tabs: AI ordering (Sierra) + Browse Store
+voice-server    = WebSocket AI engine: VAD + STT + LLM + TTS + Clover/Square POS client (?pos=)
+store-api       = FastAPI: dual-POS e-commerce REST API — menu, discounts, checkout (?pos=)
+frontend        = React UI — POS dropdown + two tabs: AI ordering (Sierra) + Browse Store
 Soniox STT/TTS  = speech-to-text and text-to-speech (Punjabi / Hindi / English)
 OpenAI LLM      = conversation brain (gpt-4o-mini)
-Clover POS      = live menu + order creation (shared by voice-server and store-api)
+Clover POS      = live menu + order creation (default POS)
+Square POS      = optional POS — Payment Links checkout; sandbox catalog has 20 bakery items
 Docker Compose  = runs all five services
 ```

@@ -1,8 +1,10 @@
 # Browse Store — E-Commerce Tab
 
-The "Browse Store" tab is a full e-commerce storefront built into the existing React frontend at `voice.bizbull.ai`. Customers can browse the Parkash Sweets menu, add items to a cart, customise modifiers, and place an order that lands directly in the Clover POS dashboard and kitchen display.
+The "Browse Store" tab is a full e-commerce storefront built into the existing React frontend at `voice.bizbull.ai`. Customers can browse the menu, add items to a cart, customise modifiers, and place an order that lands directly in the POS dashboard.
 
-This is **separate from the AI ordering tab** — no voice, no Sierra, no WebSocket. It's a standard React + REST API flow backed by Clover.
+This is **separate from the AI ordering tab** — no voice, no Sierra, no WebSocket. It's a standard React + REST API flow.
+
+**Dual POS:** A dropdown in the header (persisted in localStorage) switches between **Clover** (default, Parkash Sweets Indian food) and **Square** (bakery test catalog). All store-api endpoints accept `?pos=clover|square`. The Store component re-fetches the menu when the POS changes.
 
 ---
 
@@ -37,9 +39,9 @@ This is **separate from the AI ordering tab** — no voice, no Sierra, no WebSoc
 
 All endpoints are served at port 8766 internally. Caddy strips the `/store-api` prefix so the service sees requests without it.
 
-### `GET /menu`
+### `GET /menu?pos=clover|square`
 
-Fetches all items from Clover:
+**Clover path:** Fetches all items from Clover:
 
 ```
 GET https://api.clover.com/v3/merchants/{mId}/items
@@ -85,17 +87,24 @@ Returns:
 }
 ```
 
-### `GET /discounts`
+**Square path:** Calls `GET /v2/catalog/list?types=ITEM,CATEGORY,MODIFIER_LIST`. Returns the same `{ categories, items }` shape. Item `id` = variation_id (used as `catalog_object_id` in orders). Prices in cents. Items require `categories[]` array for category assignment (legacy `category_id` field is often empty in newer Square API responses).
 
-Returns named discounts configured in Clover (used to populate the promo code input):
+### `GET /discounts?pos=clover|square`
+
+**Clover:** Returns named discounts configured in Clover (used to populate the promo code input).
+**Square:** Fetches `DISCOUNT` objects from Square catalog.
 
 ```json
 { "discounts": [{ "id": "ABC123", "name": "SUMMER10" }] }
 ```
 
-### `POST /checkout`
+### `POST /checkout?pos=clover|square`
 
 **This is the primary checkout path for the Browse Store tab.**
+
+**Square path:** POSTs to `/v2/online-checkout/payment-links`. Returns `{ checkout_url }` pointing to Square's hosted payment page. On success, Square redirects to `FRONTEND_URL?payment=success`. Do NOT include `pre_populated_data.buyer_phone_number` — Square rejects it unless the phone is E.164-formatted (`+12223334444`).
+
+**Clover path (default):**
 
 Request body (same shape as `POST /orders` plus optional `discount_code`):
 ```json
@@ -254,16 +263,18 @@ On startup, `Store` calls `GET /store-api/menu` with a 6-second timeout. On any 
 
 ---
 
-## Tab Switcher (App.tsx)
+## Tab Switcher + POS Dropdown (App.tsx)
 
 ```tsx
 type Tab = "ai" | "store"
+type POS = "clover" | "square"
 const [tab, setTab] = useState<Tab>("ai")
+const [pos, setPos] = useState<POS>(() => (localStorage.getItem("pos") as POS) ?? "clover")
 ```
 
-The header has two pill buttons with amber accent for the active tab. Switching tabs is instant (no page load — both components stay mounted in the same app).
+The header has two pill buttons with amber accent for the active tab, plus a POS `<select>` dropdown. The `pos` value is persisted in localStorage and passed as a prop to both `<Conversation pos={pos}>` and `<Store pos={pos}>`. Switching POS triggers a menu re-fetch in both tabs simultaneously.
 
-The "Order with Sierra" tab renders `<Conversation />`. The "Browse Store" tab renders `<Store />`.
+The "Order with Sierra" tab renders `<Conversation pos={pos} />`. The "Browse Store" tab renders `<Store pos={pos} />`.
 
 ---
 
@@ -365,6 +376,7 @@ server: {
 | Item | Status | Notes |
 |------|--------|-------|
 | Switch `CLOVER_BASE_URL` to production | Not done | Change env var + redeploy store-api; see deployment section |
+| Switch Square to production | Not done | Change `SQUARE_BASE_URL` + `SQUARE_ACCESS_TOKEN` + `SQUARE_LOCATION_ID`; re-add catalog items |
 | Order status polling in UI | Not started | `GET /orders/{id}` endpoint exists but not used in UI |
 | `book_table` tool for Sierra (AI tab) | Not started | Table reservation intent in voice agent |
 

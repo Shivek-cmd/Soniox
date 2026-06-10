@@ -21,10 +21,10 @@ A restaurant voice agent and e-commerce store for Parkash Sweets that:
 | TTS | **Soniox** | Same API, Punjabi voices, natural sounding |
 | VAD | **Silero VAD** | Detects when customer starts/stops speaking, enables barge-in |
 | LLM | **OpenAI gpt-4o-mini** | Cheap, fast, good tool-calling support |
-| POS | **Clover** | Live menu sync + real order creation in restaurant's POS system |
-| Voice bot server | **Python + websockets** | Port 8765 — runs the 4-processor pipeline + Clover client |
+| POS | **Clover** (default) + **Square** (optional) | Live menu sync + order creation; switchable via `?pos=` dropdown |
+| Voice bot server | **Python + websockets** | Port 8765 — runs the 4-processor pipeline + Clover/Square POS client |
 | Twilio bridge | **Python + FastAPI** | Port 5050 — Twilio phone bridge + Clover webhook relay |
-| Store API | **Python + FastAPI** | Port 8766 — e-commerce REST API (menu + order creation via Clover) |
+| Store API | **Python + FastAPI** | Port 8766 — dual-POS e-commerce REST API (Clover + Square via `?pos=`) |
 | Frontend | **React (Vite)** | Served via nginx — two tabs: AI ordering + Browse Store |
 | Reverse proxy | **Caddy** | Ports 80/443 — HTTPS, path-based routing to all 5 services |
 | Dev tunneling | **ngrok** | Exposes local server to Twilio during development |
@@ -51,6 +51,7 @@ soniox_examples/apps/soniox-voice-bot-demo/   ← base project
 │   ├── tools.py               ← ✅ EDITED: restaurant tools, Clover integration
 │   ├── clover.py              ← ✅ NEW: CloverClient, MenuCache, order creation
 │   ├── clover_types.py        ← ✅ NEW: CloverItem, CloverCreatedOrder, CloverOrderType
+│   ├── square_client.py       ← ✅ NEW: SquareClient + SquareMenuCache (same interface as Clover)
 │   ├── menu.json              ← spoken aliases and pronunciation hints (merged into Clover data)
 │   ├── processors/
 │   │   ├── vad.py             ← Silero VAD (don't touch)
