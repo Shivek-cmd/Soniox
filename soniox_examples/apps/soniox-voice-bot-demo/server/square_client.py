@@ -211,7 +211,12 @@ class SquareClient:
             if price is None or variation_id is None:
                 continue
 
-            cat_id   = item_data.get("category_id", "")
+            # category_id (legacy field) or first entry in categories array (newer API)
+            cat_id = item_data.get("category_id", "")
+            if not cat_id:
+                cats_arr = item_data.get("categories", [])
+                if cats_arr:
+                    cat_id = cats_arr[0].get("id", "")
             cat_name = categories.get(cat_id, "Uncategorized")
             items.append(SquareItem(
                 id=variation_id,
