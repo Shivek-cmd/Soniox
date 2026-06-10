@@ -159,7 +159,7 @@ export function Conversation({ pos }: { pos: string }) {
             className="flex flex-col border-r overflow-hidden"
             style={{ flex: "0 0 32%", borderColor: "var(--border)" }}
           >
-            <MenuPanel />
+            <MenuPanel pos={pos} />
           </div>
 
           {/* ③ Order */}
