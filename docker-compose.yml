@@ -55,6 +55,16 @@ services:
       - FRONTEND_URL=${FRONTEND_URL:-https://voice.bizbull.ai}
     restart: unless-stopped
 
+  square-store-api:
+    build:
+      context: ./soniox_examples/apps/soniox-voice-bot-demo/square-store-api
+    environment:
+      - SQUARE_BASE_URL=${SQUARE_BASE_URL:-https://connect.squareupsandbox.com}
+      - SQUARE_ACCESS_TOKEN=${SQUARE_ACCESS_TOKEN}
+      - SQUARE_LOCATION_ID=${SQUARE_LOCATION_ID}
+      - FRONTEND_URL=${SQUARE_FRONTEND_URL:-https://gurunanaksweets.bizbull.ai}
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./soniox_examples/apps/soniox-voice-bot-demo
