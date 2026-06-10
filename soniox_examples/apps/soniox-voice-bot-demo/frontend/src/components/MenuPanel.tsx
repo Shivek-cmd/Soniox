@@ -3,7 +3,7 @@ import { MENU_CATEGORIES } from "../utils/menuData";
 
 const STORE_API: string = import.meta.env.VITE_STORE_API_URL ?? "/store-api";
 
-type ApiItem = { name: string; description?: string; price: number; category_name?: string };
+type ApiItem = { name: string; description?: string; price: number; category_id?: string; category_name?: string };
 type ApiCategory = { id: string; name: string };
 
 export function MenuPanel({ pos = "clover" }: { pos?: string }) {
@@ -46,11 +46,7 @@ export function MenuPanel({ pos = "clover" }: { pos?: string }) {
 
   const items = useFallback
     ? (MENU_CATEGORIES.find((c) => c.id === effectiveActive)?.items ?? [])
-    : (apiItems ?? []).filter((i) =>
-        i.category_name
-          ? (apiCategories ?? []).find((c) => c.id === effectiveActive)?.name === i.category_name
-          : true
-      );
+    : (apiItems ?? []).filter((i) => i.category_id === effectiveActive);
 
   return (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: "var(--bg)" }}>
