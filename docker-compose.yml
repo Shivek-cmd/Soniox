@@ -62,7 +62,7 @@ services:
       - SQUARE_BASE_URL=${SQUARE_BASE_URL:-https://connect.squareupsandbox.com}
       - SQUARE_ACCESS_TOKEN=${SQUARE_ACCESS_TOKEN}
       - SQUARE_LOCATION_ID=${SQUARE_LOCATION_ID}
-      - FRONTEND_URL=${SQUARE_FRONTEND_URL:-https://gurunanaksweets.bizbull.ai}
+      - FRONTEND_URL=${SQUARE_FRONTEND_URL:-https://gurunanakbakery.bizbull.ai}
     restart: unless-stopped
 
   frontend:
