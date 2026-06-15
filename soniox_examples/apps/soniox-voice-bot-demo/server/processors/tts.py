@@ -261,11 +261,14 @@ class TTSProcessor(MessageProcessor):
                         self._active_stream_id = None
                         await self._on_stream_finalized()
 
-                error_code = content.get("error_code")
+                error_type = content.get("error_type")
                 error_message = content.get("error_message")
-                if error_code or error_message:
+                if error_type:
                     self.log.error(
-                        f"Error from Soniox API: {error_code} {error_message}"
+                        "tts.error",
+                        error_type=error_type,
+                        error_message=error_message,
+                        stream_id=stream_id,
                     )
                     # Mark this stream dead so _send_task discards any queued
                     # chunks for it, and clear _active_stream_id so the next

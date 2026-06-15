@@ -238,14 +238,15 @@ class STTProcessor(MessageProcessor):
                     if has_endpoint:
                         await self._send_message(TranscriptionEndpointMessage())
 
-                error_code = content.get("error_code")
+                error_type = content.get("error_type")
                 error_message = content.get("error_message")
-                if error_code or error_message:
-                    # In case of error, still send the final transcript (if any remaining in the buffer)
+                if error_type:
+                    # Flush any buffered transcript before closing
                     await self._send_message(TranscriptionEndpointMessage())
-
                     self.log.error(
-                        f"Error from Soniox API: {error_code} {error_message}"
+                        "stt.error",
+                        error_type=error_type,
+                        error_message=error_message,
                     )
 
         except websockets.exceptions.ConnectionClosed:

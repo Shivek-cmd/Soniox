@@ -65,8 +65,12 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS") or "120")
 
 STT_CONTEXT = {
     "general": [
-        {"key": "domain", "value": "restaurant"},
-        {"key": "topic", "value": "food ordering"},
+        {"key": "restaurant", "value": RESTAURANT_NAME},
+        {"key": "location",   "value": "Canada"},
+        {"key": "setting",    "value": "Phone ordering"},
+        {"key": "domain",     "value": "restaurant"},
+        {"key": "topic",      "value": "Customer placing a takeaway order"},
+        {"key": "language",   "value": "Punjabi, Hindi, English"},
     ],
     "terms": [RESTAURANT_NAME] + STT_TERMS + ["dine-in", "pickup", "delivery"],
 }
