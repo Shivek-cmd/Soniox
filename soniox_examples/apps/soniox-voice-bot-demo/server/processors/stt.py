@@ -8,6 +8,8 @@ from messages import (
     TranscriptionEndpointMessage,
     TranscriptionMessage,
     UserAudioMessage,
+    UserSpeechEndMessage,
+    UserSpeechStartMessage,
 )
 from processors.message_processor import MessageProcessor
 
@@ -15,6 +17,7 @@ KEEPALIVE_MESSAGE = json.dumps({"type": "keepalive"})
 KEEPALIVE_INTERVAL = 5
 
 END_TOKEN = "<end>"
+FIN_TOKEN = "<fin>"  # returned by manual {"type": "finalize"} — treated same as <end>
 
 
 class STTProcessor(MessageProcessor):
@@ -30,6 +33,7 @@ class STTProcessor(MessageProcessor):
         num_channels: int | None = 1,
         language_hints: list[str] | None = None,
         context: str | None = None,
+        max_endpoint_delay_ms: int = 500,
     ):
         """
         Initialize the STT processor.
@@ -60,6 +64,7 @@ class STTProcessor(MessageProcessor):
 
         self._language_hints = language_hints
         self._context = context
+        self._max_endpoint_delay_ms = max_endpoint_delay_ms
 
         self._websocket = None
         self._receive_task = None
@@ -69,6 +74,7 @@ class STTProcessor(MessageProcessor):
 
         self._send_message = None
         self._alive = False
+        self._utterance_finalized = False  # prevents duplicate finalize per utterance
 
     async def start(
         self,
@@ -89,6 +95,7 @@ class STTProcessor(MessageProcessor):
             "api_key": self._api_key,
             "model": self._model,
             "enable_endpoint_detection": True,
+            "max_endpoint_delay_ms": self._max_endpoint_delay_ms,
             "enable_non_final_tokens": True,
             "language_hints": self._language_hints,
             "context": self._context,
@@ -152,6 +159,22 @@ class STTProcessor(MessageProcessor):
             except asyncio.QueueFull:
                 self.log.debug("STT send queue full, dropping audio")
 
+        elif isinstance(message, UserSpeechStartMessage):
+            # Reset flag so the next speech end can trigger a fresh finalize.
+            self._utterance_finalized = False
+
+        elif isinstance(message, UserSpeechEndMessage):
+            # VAD detected silence — finalize immediately instead of waiting
+            # for Soniox's own endpoint detection (which defaults to 2000ms).
+            # Guard prevents duplicate finalize messages for the same utterance.
+            if self._websocket and not self._utterance_finalized:
+                self._utterance_finalized = True
+                try:
+                    await self._websocket.send(json.dumps({"type": "finalize"}))
+                    self.log.debug("stt.manual_finalize")
+                except websockets.exceptions.ConnectionClosed:
+                    pass
+
     async def _send_task_handler(self):
         try:
             while self._alive:
@@ -197,7 +220,7 @@ class STTProcessor(MessageProcessor):
                     has_endpoint = False
 
                     for token in tokens:
-                        if token["is_final"] and token["text"] == END_TOKEN:
+                        if token["is_final"] and token["text"] in (END_TOKEN, FIN_TOKEN):
                             has_endpoint = True
                         elif token["is_final"]:
                             final_tokens.append(token)
