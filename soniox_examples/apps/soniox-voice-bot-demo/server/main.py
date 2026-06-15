@@ -307,6 +307,7 @@ async def handle(websocket: ServerConnection):
             send_opening_greeting=not params.skip_opening_greeting,
             opening_greeting=OPENING_GREETINGS.get(initial_language, OPENING_GREETINGS["english"]),
             language_preselected=not params.skip_opening_greeting,
+            initial_language=initial_language,
         ),
         DynamicTTSProcessor(
             state=state,
