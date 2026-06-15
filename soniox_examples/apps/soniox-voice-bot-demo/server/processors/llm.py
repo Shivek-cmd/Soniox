@@ -1,4 +1,5 @@
 import asyncio
+import random
 import re
 import json
 import time
@@ -48,6 +49,27 @@ OPENING_GREETINGS = {
         "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ Sierra ਹਾਂਜੀ, ਪ੍ਰਕਾਸ਼ Sweets ਤੋਂ। "
         "ਅੱਜ ਮੈਂ ਤੁਹਾਡੀ ਕੀ madad ਕਰ ਸਕਦੀ ਹਾਂ?"
     ),
+}
+
+TOOL_CALL_FILLERS: dict[str, list[str]] = {
+    "english": [
+        "Sure, give me just a moment...",
+        "One sec, let me check that for you...",
+        "Hold on just a second...",
+        "Let me pull that up real quick...",
+    ],
+    "punjabi": [
+        "ਇੱਕ ਮਿੰਟ ਹਾਂਜੀ...",
+        "ਜ਼ਰੂਰ, ਹੁਣੇ ਦੱਸਦੀ ਹਾਂ...",
+        "ਹਾਂ ਹਾਂਜੀ, ਇੱਕ ਪਲ...",
+        "ਹੁਣੇ ਚੈੱਕ ਕਰਦੀ ਹਾਂ...",
+    ],
+    "hindi": [
+        "एक सेकंड...",
+        "हाँ ज़रूर, अभी देखती हूँ...",
+        "बस एक पल...",
+        "अभी चेक करती हूँ...",
+    ],
 }
 
 LANGUAGE_PROMPT = "Main Punjabi, Hindi, te English vich help kar sakdi hanji — aap kis vich comfortable ho?"
@@ -144,6 +166,7 @@ class LLMProcessor(MessageProcessor):
         send_opening_greeting: bool = True,
         opening_greeting: str | None = None,
         language_preselected: bool = False,
+        initial_language: str = "english",
     ):
         """Initialize the LLM processor.
 
@@ -171,6 +194,7 @@ class LLMProcessor(MessageProcessor):
                 self._tool_functions[tool[0]["function"]["name"]] = tool[1]
 
         self._opening_greeting = opening_greeting or OPENING_GREETING
+        self._current_language: str = initial_language
         self._active_task: asyncio.Task | None = None
         self._awaiting_language_selection = not language_preselected
         self._user_speech_started = False
@@ -365,6 +389,7 @@ class LLMProcessor(MessageProcessor):
 
     async def _handle_language_selection(self, language: str):
         self._awaiting_language_selection = False
+        self._current_language = language
 
         if self._on_language_selected:
             self._on_language_selected(language)
@@ -408,10 +433,22 @@ class LLMProcessor(MessageProcessor):
                     max_tokens=self._max_tokens,
                 )
                 tool_calls = []
+                _filler_sent = False
 
                 async for chunk in response:
                     if chunk.choices[0].delta.tool_calls:
-                        # Tool calls
+                        # Fire filler phrase the moment we know a tool call is coming.
+                        # This fills dead air while the tool executes + LLM re-calls.
+                        if not _filler_sent and self._send_message:
+                            filler = random.choice(
+                                TOOL_CALL_FILLERS.get(
+                                    self._current_language, TOOL_CALL_FILLERS["english"]
+                                )
+                            )
+                            await self._send_message(LLMChunkMessage(filler))
+                            await self._send_message(LLMFullMessage(filler))
+                            self._remember_assistant_text(filler)
+                            _filler_sent = True
                         tool_calls = _update_tool_calls(
                             tool_calls, chunk.choices[0].delta.tool_calls
                         )
