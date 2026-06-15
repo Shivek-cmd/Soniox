@@ -97,6 +97,7 @@ class STTProcessor(MessageProcessor):
             "enable_endpoint_detection": True,
             "max_endpoint_delay_ms": self._max_endpoint_delay_ms,
             "enable_non_final_tokens": True,
+            "enable_language_identification": True,
             "language_hints": self._language_hints,
             "context": self._context,
         }
