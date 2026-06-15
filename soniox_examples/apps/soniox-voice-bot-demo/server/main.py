@@ -116,7 +116,7 @@ class DynamicTTSProcessor(TTSProcessor):
         if task_running and idle_secs < _TTS_IDLE_RECONNECT_SECS:
             return
         # Cancel any stale tasks before opening a fresh connection.
-        for task in (self._receive_task, self._send_task):
+        for task in (self._receive_task, self._send_task, self._keepalive_task):
             if task and not task.done():
                 task.cancel()
                 try:
@@ -150,6 +150,7 @@ class DynamicTTSProcessor(TTSProcessor):
             raise _last_exc
         self._receive_task = asyncio.create_task(self._receive_task_handler())
         self._send_task = asyncio.create_task(self._send_task_handler())
+        self._keepalive_task = asyncio.create_task(self._keepalive_task_handler())
         self._alive = True
 
     async def _generate_tts_response(self, message):

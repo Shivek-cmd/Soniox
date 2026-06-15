@@ -60,6 +60,7 @@ class TTSProcessor(MessageProcessor):
         self._websocket = None
         self._receive_task = None
         self._send_task = None
+        self._keepalive_task = None
         self._send_queue = asyncio.Queue(maxsize=100)
 
         self._active_stream_id: str | None = None
@@ -95,6 +96,9 @@ class TTSProcessor(MessageProcessor):
         if self._send_task:
             self._send_task.cancel()
             tasks.append(self._send_task)
+        if self._keepalive_task:
+            self._keepalive_task.cancel()
+            tasks.append(self._keepalive_task)
 
         for task in tasks:
             try:
@@ -121,9 +125,24 @@ class TTSProcessor(MessageProcessor):
         pass
 
     def _cancel_generation(self):
-        # Soniox doesn't have support for cancelling in-progress TTS streams,
-        # but we can achieve a similar effect by simply knowing the stream ID
+        if self._active_stream_id:
+            try:
+                self._send_queue.put_nowait({"stream_id": self._active_stream_id, "cancel": True})
+            except asyncio.QueueFull:
+                pass
         self._active_stream_id = None
+
+    async def _keepalive_task_handler(self):
+        try:
+            while self._alive:
+                await asyncio.sleep(20)
+                if self._websocket and not self._active_stream_id:
+                    try:
+                        self._send_queue.put_nowait({"keep_alive": True})
+                    except asyncio.QueueFull:
+                        pass
+        except asyncio.CancelledError:
+            pass
 
     async def _generate_tts_response(self, message: LLMChunkMessage | LLMFullMessage):
         async with self._tts_lock:
