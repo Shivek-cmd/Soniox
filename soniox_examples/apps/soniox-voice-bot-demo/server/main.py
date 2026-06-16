@@ -17,7 +17,7 @@ from websockets.asyncio.server import serve
 
 from languages import LANGUAGES, LANGUAGES_MAP
 from messages import ErrorMessage, OrderConfirmedMessage, TransferCallMessage
-from processors.llm import LLMProcessor, OPENING_GREETINGS
+from processors.llm import LLMProcessor, OPENING_GREETING, OPENING_GREETINGS
 from processors.message_processor import MessageProcessor
 from processors.stt import STTProcessor
 from processors.tts import TTSProcessor
@@ -205,6 +205,7 @@ class QueryParams(pydantic.BaseModel):
     audio_out_format: str = "pcm_s16le"
     audio_out_sample_rate: int = 24000
     skip_opening_greeting: bool = False
+    phone: bool = False
     caller_phone: str = ""
     pos: str = "clover"
 
@@ -294,14 +295,13 @@ async def handle(websocket: ServerConnection):
         LLMProcessor(
             api_key=OPENAI_API_KEY,
             model=OPENAI_MODEL,
-            # Phone calls (skip_opening_greeting=True): WAV greeting already asked
-            # "English, Hindi, or Punjabi?" — use "auto" system message so the LLM
-            # isn't locked to one language before the customer has chosen.
-            # language_preselected=False activates LLMProcessor's built-in language
-            # detection: it catches the first "Punjabi"/"Hindi"/"English" utterance,
-            # updates TTS, sends a canned warm response, then hands off to the LLM.
+            # Language-detection mode is active when:
+            #   phone=True  — TTS speaks the language-selector greeting; caller picks English/Hindi/Punjabi
+            #   skip_opening_greeting=True  — legacy WAV path (kept for reverting)
+            # In both cases: system_message="auto", language_preselected=False.
+            # Browser flow (phone=False, skip_opening_greeting=False): language pre-selected in UI.
             system_message=get_system_message(
-                "auto" if params.skip_opening_greeting else LANGUAGES_MAP[params.language],
+                "auto" if (params.phone or params.skip_opening_greeting) else LANGUAGES_MAP[params.language],
                 caller_phone=params.caller_phone,
                 pos_client=state.pos_client,
             ),
@@ -310,8 +310,12 @@ async def handle(websocket: ServerConnection):
             max_tokens=LLM_MAX_TOKENS,
             on_language_selected=select_language_without_llm,
             send_opening_greeting=not params.skip_opening_greeting,
-            opening_greeting=OPENING_GREETINGS.get(initial_language, OPENING_GREETINGS["english"]),
-            language_preselected=not params.skip_opening_greeting,
+            opening_greeting=(
+                OPENING_GREETING
+                if params.phone
+                else OPENING_GREETINGS.get(initial_language, OPENING_GREETINGS["english"])
+            ),
+            language_preselected=not (params.phone or params.skip_opening_greeting),
             initial_language=initial_language,
         ),
         DynamicTTSProcessor(

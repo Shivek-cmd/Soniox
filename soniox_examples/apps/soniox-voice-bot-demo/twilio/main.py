@@ -15,8 +15,6 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import HTMLResponse
 from fastapi.websockets import WebSocketDisconnect
-from pathlib import Path
-import wave
 
 from twilio.rest import Client as TwilioRestClient
 from twilio.twiml.voice_response import Connect, Dial, Number, VoiceResponse
@@ -28,7 +26,6 @@ PORT = int(os.getenv("PORT", 5050))
 SONIOX_VOICE_BOT_WS_URL = os.getenv("SONIOX_VOICE_BOT_WS_URL", "")
 VOICE_BOT_LANGUAGE = os.getenv("VOICE_BOT_LANGUAGE", "en")
 VOICE_BOT_VOICE = os.getenv("VOICE_BOT_VOICE", "Maya")
-OPENING_GREETING_AUDIO_PATH = os.getenv("OPENING_GREETING_AUDIO_PATH", "")
 
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
@@ -51,57 +48,7 @@ if not OWNER_PHONE_NUMBER:
 if not NGROK_URL:
     print("WARNING: NGROK_URL is not set. Call transfer will not work.")
 
-if OPENING_GREETING_AUDIO_PATH and not Path(OPENING_GREETING_AUDIO_PATH).exists():
-    print(
-        "WARNING: OPENING_GREETING_AUDIO_PATH is set but the file does not exist. "
-        "Falling back to generated voice-server greeting."
-    )
-
-
 app = FastAPI()
-
-
-def load_opening_greeting_ulaw() -> bytes | None:
-    """Load a cached greeting as Twilio-ready 8kHz mulaw bytes.
-
-    Supported inputs:
-    - raw .ulaw/.mulaw bytes at 8kHz
-    - PCM .wav, which is converted to 8kHz mulaw
-    """
-    if not OPENING_GREETING_AUDIO_PATH:
-        return None
-
-    path = Path(OPENING_GREETING_AUDIO_PATH)
-    if not path.exists():
-        return None
-
-    if path.suffix.lower() in {".ulaw", ".mulaw"}:
-        return path.read_bytes()
-
-    if path.suffix.lower() == ".wav":
-        with wave.open(str(path), "rb") as wav_file:
-            num_channels = wav_file.getnchannels()
-            sample_width = wav_file.getsampwidth()
-            sample_rate = wav_file.getframerate()
-            pcm_audio = wav_file.readframes(wav_file.getnframes())
-
-        if sample_width != 2:
-            raise ValueError("Opening greeting WAV must be 16-bit PCM.")
-
-        if num_channels != 1:
-            pcm_audio = audioop.tomono(pcm_audio, sample_width, 0.5, 0.5)
-            num_channels = 1
-
-        if sample_rate != 8000:
-            pcm_audio = audioop.ratecv(
-                pcm_audio, sample_width, num_channels, sample_rate, 8000, None
-            )[0]
-
-        return audioop.lin2ulaw(pcm_audio, sample_width)
-
-    raise ValueError(
-        "OPENING_GREETING_AUDIO_PATH must point to a .wav, .ulaw, or .mulaw file."
-    )
 
 
 @app.post("/clover-webhook")
@@ -187,14 +134,13 @@ async def handle_media_stream(websocket: WebSocket):
 
     caller_phone = websocket.query_params.get("caller_phone", "")
 
-    opening_greeting_ulaw = load_opening_greeting_ulaw()
-    skip_voice_server_greeting = "true" if opening_greeting_ulaw else "false"
-
+    # phone=true tells the voice server: speak the language-selection greeting via TTS
+    # and wait for the caller to choose English / Hindi / Punjabi before ordering.
     voice_bot_url_with_params = (
         f"{SONIOX_VOICE_BOT_WS_URL}"
         f"?audio_in_format=mulaw&audio_in_sample_rate=8000&audio_in_num_channels=1"
         f"&language={VOICE_BOT_LANGUAGE}&voice={VOICE_BOT_VOICE}"
-        f"&skip_opening_greeting={skip_voice_server_greeting}"
+        f"&phone=true"
     )
     if caller_phone:
         voice_bot_url_with_params += f"&caller_phone={quote(caller_phone, safe='')}"
@@ -202,15 +148,13 @@ async def handle_media_stream(websocket: WebSocket):
         # Per-call state
         stream_sid = None
         call_sid = None
-        opening_greeting_sent = False
-        opening_greeting_task = None
 
         # Queue to track 'mark' messages sent to Twilio — used for barge-in
         mark_queue = []
 
         async def receive_from_twilio():
             """Receive audio data from Twilio and forward it to the voice bot."""
-            nonlocal stream_sid, call_sid, opening_greeting_sent, opening_greeting_task
+            nonlocal stream_sid, call_sid
             try:
                 async for message in websocket.iter_text():
                     data = json.loads(message)
@@ -222,9 +166,6 @@ async def handle_media_stream(websocket: WebSocket):
                         stream_sid = data["start"]["streamSid"]
                         call_sid = data["start"]["callSid"]
                         print(f"Stream started: stream_sid={stream_sid} call_sid={call_sid}")
-                        if opening_greeting_ulaw and not opening_greeting_sent:
-                            opening_greeting_sent = True
-                            opening_greeting_task = asyncio.create_task(send_cached_opening_greeting())
                     elif data["event"] == "mark":
                         if mark_queue:
                             mark_queue.pop(0)
@@ -275,10 +216,6 @@ async def handle_media_stream(websocket: WebSocket):
 
         async def handle_speech_started_event():
             """Cut bot audio if customer speaks while bot is talking."""
-            nonlocal opening_greeting_task
-            if opening_greeting_task and not opening_greeting_task.done():
-                opening_greeting_task.cancel()
-                opening_greeting_task = None
             if mark_queue:
                 await websocket.send_json({"event": "clear", "streamSid": stream_sid})
                 mark_queue.clear()
@@ -291,39 +228,6 @@ async def handle_media_stream(websocket: WebSocket):
                     "mark": {"name": "responsePart"},
                 })
                 mark_queue.append("responsePart")
-
-        async def send_cached_opening_greeting():
-            """Stream cached 8kHz mulaw greeting audio directly to Twilio."""
-            if not opening_greeting_ulaw or not stream_sid:
-                return
-
-            # Send in large chunks — Twilio buffers and plays at correct rate.
-            # No sleep needed; asyncio.sleep jitter causes buffer underruns and choppy audio.
-            chunk_size = 3200  # 400ms of audio per send, reduces WebSocket overhead.
-            print("Sending cached opening greeting to Twilio.")
-            mark_queue.append("cachedOpeningGreeting")
-            try:
-                for start in range(0, len(opening_greeting_ulaw), chunk_size):
-                    if not stream_sid:
-                        return
-
-                    chunk = opening_greeting_ulaw[start:start + chunk_size]
-                    audio_payload = base64.b64encode(chunk).decode("utf-8")
-                    await websocket.send_json({
-                        "event": "media",
-                        "streamSid": stream_sid,
-                        "media": {"payload": audio_payload},
-                    })
-            except asyncio.CancelledError:
-                print("Cached opening greeting cancelled by caller speech.")
-                return
-
-            if stream_sid:
-                await websocket.send_json({
-                    "event": "mark",
-                    "streamSid": stream_sid,
-                    "mark": {"name": "cachedOpeningGreeting"},
-                })
 
         async def initiate_call_transfer(cid: str | None, reason: str):
             """Redirect the live call to the restaurant owner via Twilio REST API."""
