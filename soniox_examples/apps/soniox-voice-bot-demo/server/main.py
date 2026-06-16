@@ -16,7 +16,8 @@ from websockets import ServerConnection
 from websockets.asyncio.server import serve
 
 from languages import LANGUAGES, LANGUAGES_MAP
-from messages import ErrorMessage, OrderConfirmedMessage, TransferCallMessage
+from messages import ErrorMessage, LLMChunkMessage, OrderConfirmedMessage, TransferCallMessage
+from tts_substitutions import apply_tts_substitutions
 from processors.llm import LLMProcessor, OPENING_GREETING, OPENING_GREETINGS
 from processors.message_processor import MessageProcessor
 from processors.stt import STTProcessor
@@ -168,6 +169,10 @@ class DynamicTTSProcessor(TTSProcessor):
                 if self._send_message:
                     await self._send_message(ErrorMessage("TTS connection failed"))
                 return
+        if isinstance(message, LLMChunkMessage):
+            substituted = apply_tts_substitutions(message.text())
+            if substituted != message.text():
+                message = LLMChunkMessage(substituted)
         await super()._generate_tts_response(message)
 
     async def _on_stream_finalized(self):
