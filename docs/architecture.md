@@ -276,7 +276,7 @@ await session.run()
 File: `server/processors/vad.py` — Silero VAD. Detects speech start/end. Enables barge-in.
 
 ### 2. `STTProcessor`
-File: `server/processors/stt.py` — Streams audio to Soniox real-time STT. Language hints: `["pa", "hi", "en"]`.
+File: `server/processors/stt.py` — Streams audio to Soniox real-time STT (`stt-rt-v5`). Language hints: `["pa", "hi", "en"]`. Key optimizations: `max_endpoint_delay_ms=500` (4× faster than default), manual VAD finalization via `{"type": "finalize"}` on silence, enriched STT context (6 general keys + all menu terms auto-built from POS), `endpoint_sensitivity` param wired for v5 tuning.
 
 ### 3. `LLMProcessor`
 File: `server/processors/llm.py` — Sends transcriptions to OpenAI, streams response to TTS. Calls tools (`place_order`, `get_menu`, `check_item_availability`, `select_language`, `transfer_call`).
@@ -287,6 +287,9 @@ Defined in: `server/main.py`
 - Time-based reconnect if idle >45s
 - Up to 3 retry attempts on Soniox handshake timeout
 - Dead stream ID recovery if Soniox returns 408/400
+- **Keepalive**: sends `{"keep_alive": true}` every 20s when idle — prevents Soniox idle timeout
+- **Cancel on barge-in**: sends `{"stream_id": "...", "cancel": true}` — stops synthesis instantly
+- **Error handling**: branches on `error_type` (stable) not `error_message`
 
 ---
 

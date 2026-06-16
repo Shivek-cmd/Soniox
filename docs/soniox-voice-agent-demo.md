@@ -88,7 +88,7 @@ Key customizations beyond the base demo:
 ```python
 processors = [
     VADProcessor(sample_rate=params.audio_in_sample_rate),
-    STTProcessor(api_key=SONIOX_API_KEY, model="stt-rt-v4", language_hints=stt_hints, context=STT_CONTEXT),
+    STTProcessor(api_key=SONIOX_API_KEY, model="stt-rt-v5", language_hints=stt_hints, context=STT_CONTEXT, max_endpoint_delay_ms=500),
     LLMProcessor(api_key=OPENAI_API_KEY, model="gpt-4o-mini", system_message=..., tools=get_tools(state)),
     DynamicTTSProcessor(state=state, api_key=SONIOX_API_KEY, model="tts-rt-v1", language=..., voice=...),
 ]
@@ -281,3 +281,11 @@ VITE_SONIOX_VOICE_BOT_WS_URL=ws://localhost:8765
 | No cached greeting | Pre-generated WAV greeting (zero TTS latency on first message) |
 | Generic frontend | Parkash Sweets branded: 3-col layout, menu panel, receipt card, Sierra avatar |
 | No real-time order parsing | `parseOrderFromBotMessages()` + local fallback receipt |
+| `stt-rt-v4` default | Upgraded to `stt-rt-v5` (June 2026) — better accented speech + code-switching |
+| Default endpoint delay (2000ms) | `max_endpoint_delay_ms=500` + manual VAD finalization — ~1500ms faster per turn |
+| No TTS keepalive | `{"keep_alive": true}` every 20s — prevents idle reconnect mid-call |
+| No TTS cancel | `{"stream_id": "...", "cancel": true}` on barge-in — stops wasted synthesis |
+| No filler phrases | Random filler ("One sec…") sent on first tool call chunk — kills dead air |
+| Minimal STT context (2 keys) | 6 `general` keys (restaurant, location, setting, domain, topic, language) + all menu terms |
+| Error handling on `error_message` | Branches on `error_type` (stable across Soniox releases) in both stt.py + tts.py |
+| `endpoint_sensitivity` not set | Parameter wired in `STTProcessor` — tunable for v5 faster finalization |

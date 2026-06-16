@@ -28,14 +28,22 @@ The voice bot server (`server/`) uses the Python SDK via the `STTProcessor` and 
 ```python
 STTProcessor(
     api_key=SONIOX_API_KEY,
-    model="stt-rt-v4",
-    audio_format="mulaw",         # or "pcm_s16le" for browser
-    audio_sample_rate=8000,       # 8000 for Twilio, 16000 for browser
+    model="stt-rt-v5",             # upgraded from v4 (June 2026)
+    audio_format="mulaw",          # or "pcm_s16le" for browser
+    audio_sample_rate=8000,        # 8000 for Twilio, 16000 for browser
     num_channels=1,
-    language_hints=["pa", "hi", "en"],   # Punjabi + Hindi + English
+    max_endpoint_delay_ms=500,     # 4× faster than default 2000ms
+    language_hints=["pa", "hi", "en"],
     context={
-        "general": [{"key": "domain", "value": "restaurant"}],
-        "terms": ["Parkash Sweets", "Chole Bhatura", ...]  # all menu items
+        "general": [
+            {"key": "restaurant", "value": "Parkash Sweets"},
+            {"key": "location",   "value": "Canada"},
+            {"key": "setting",    "value": "Phone ordering"},
+            {"key": "domain",     "value": "restaurant"},
+            {"key": "topic",      "value": "Customer placing a takeaway order"},
+            {"key": "language",   "value": "Punjabi, Hindi, English"},
+        ],
+        "terms": ["Parkash Sweets", "Gulab Jamun", ...]  # auto-built from Clover/Square menu
     }
 )
 ```
@@ -127,14 +135,28 @@ ulaw   = audioop.lin2ulaw(pcm_8k, 2)
 
 ---
 
+## Latency Optimizations
+
+| Optimization | How | Impact |
+|---|---|---|
+| Faster STT endpoint detection | `max_endpoint_delay_ms=500` (default 2000ms) | ~1500ms saved per utterance |
+| Manual VAD finalization | VAD silence → `{"type": "finalize"}` sent immediately | Skips Soniox's internal timer |
+| TTS keepalive | `{"keep_alive": true}` every 20s when idle | Avoids cold reconnect mid-call |
+| TTS cancel on barge-in | `{"stream_id": "...", "cancel": true}` | Stops wasted synthesis instantly |
+| Filler phrases | Sent on first `delta.tool_calls` chunk from LLM | Kills dead air during menu lookup |
+| `endpoint_sensitivity` | v5 param — higher = finalizes sooner | Optional tuning knob |
+
+---
+
 ## Key Features We Rely On
 
-- **Multilingual** — customer speaks Punjabi or English, Soniox handles both in one session
-- **Language hints** — `language_hints=["pa", "hi", "en"]` tells Soniox which scripts to expect
-- **STT context terms** — all 80+ menu item names passed so Soniox recognises food names correctly
-- **End-of-utterance detection** — built into STT processor, triggers LLM call
-- **Sub-200ms latency** — fast enough for natural phone conversation
-- **Streaming TTS** — audio chunks arrive as generation happens, first chunk plays before full text is ready
+- **stt-rt-v5** — latest model (June 2026); better accented speech, mid-sentence code-switching, alphanumeric precision
+- **Multilingual per-token** — language ID per token; handles Punjabi/Hindi/English mixed in one sentence
+- **Language hints** — `language_hints=["pa", "hi", "en"]` biases recognition toward expected scripts
+- **Enriched STT context** — 6 `general` keys (restaurant, location, setting, domain, topic, language) + all 80+ menu terms
+- **Manual VAD finalization** — Silero VAD triggers `{"type": "finalize"}` immediately on silence, skipping Soniox's 2s default wait
+- **Streaming TTS** — audio chunks start playing before full LLM response is generated
+- **Error type branching** — both `stt.py` and `tts.py` branch on `error_type` (stable) not `error_message`
 
 ---
 
