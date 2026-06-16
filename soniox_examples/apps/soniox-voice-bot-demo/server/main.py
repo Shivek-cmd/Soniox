@@ -266,9 +266,12 @@ async def handle(websocket: ServerConnection):
         state.tts_language = config["tts_language"]
         state.tts_voice = config["tts_voice"]
 
-    # Pre-select the language chosen in the frontend — no need to ask again
     initial_language = LANGUAGES_MAP.get(params.language, "English").lower()
-    select_language_without_llm(initial_language)
+    # Phone calls: opening greeting is English — TTS must be set to English so
+    # Maya reads the text correctly. After the caller says their language,
+    # on_language_selected switches TTS to the chosen language automatically.
+    # Browser: language was pre-selected in the UI dropdown, use it directly.
+    select_language_without_llm("english" if params.phone else initial_language)
 
     # STT hints scoped to the selected language so transcription stays in the right script.
     # English → Latin only. Hindi → Devanagari + Latin. Punjabi → all three.

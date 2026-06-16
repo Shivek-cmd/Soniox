@@ -30,10 +30,8 @@ from messages import (
 from processors.message_processor import MessageProcessor
 
 OPENING_GREETING = (
-    "Sat Sri Akal! Parkash Sweets vich aapda swagat hai! "
-    "Main Sierra hanji — your virtual assistant. "
-    "Main Punjabi, Hindi, te English — teeno vich help kar sakdi hanji. "
-    "Aap kis vich comfortable ho?"
+    "Hi! This is Sierra from Parkash Sweets. "
+    "Would you like to continue in English, Hindi, or Punjabi?"
 )
 
 OPENING_GREETINGS = {
