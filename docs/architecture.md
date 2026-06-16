@@ -178,7 +178,7 @@ Twilio opens media WebSocket
   v
 Caddy → twilio-bridge /media-stream
   |
-  | ws://voice-server:8765?audio_in_format=mulaw&...&skip_opening_greeting=true
+  | ws://voice-server:8765?audio_in_format=mulaw&...&phone=true
   v
 voice-server (new Session)
   |
@@ -290,6 +290,7 @@ Defined in: `server/main.py`
 - **Keepalive**: sends `{"keep_alive": true}` every 20s when idle — prevents Soniox idle timeout
 - **Cancel on barge-in**: sends `{"stream_id": "...", "cancel": true}` — stops synthesis instantly
 - **Error handling**: branches on `error_type` (stable) not `error_message`
+- **TTS word substitution**: intercepts `LLMChunkMessage` before Soniox TTS — maps Punjabi/Hindi words (ਮਦਦ→help, ਪੁਸ਼ਟੀ→confirmed, ਸਮੱਸਿਆ→problem, etc.) to the English equivalents Canadian Punjabi speakers naturally use. Edit `server/tts_substitutions.py` to add words — chat transcript is never affected.
 
 ---
 
@@ -333,7 +334,6 @@ TWILIO_NUMBER=+15878175156
 YOUR_NUMBER=+919413752688
 OWNER_PHONE_NUMBER=...
 NGROK_URL=https://voice.bizbull.ai
-OPENING_GREETING_AUDIO_PATH=assets/opening_greeting.wav
 CLOVER_WEBHOOK_SECRET=...
 ```
 

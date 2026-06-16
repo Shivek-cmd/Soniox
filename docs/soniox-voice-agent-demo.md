@@ -80,8 +80,8 @@ Contains:
 ### `server/main.py` — WebSocket server entry point
 
 Key customizations beyond the base demo:
-- `DynamicTTSProcessor` — subclasses `TTSProcessor`, reads `state.tts_language`/`state.tts_voice` at each new TTS stream start so language switching takes effect immediately. Also fires `OrderConfirmedMessage` or `TransferCallMessage` after TTS audio finishes playing.
-- `QueryParams` — parses `language`, `voice`, `audio_in_format`, `caller_phone`, `skip_opening_greeting`
+- `DynamicTTSProcessor` — subclasses `TTSProcessor`, reads `state.tts_language`/`state.tts_voice` at each new TTS stream start so language switching takes effect immediately. Applies TTS word substitutions (ਮਦਦ→help, ਪੁਸ਼ਟੀ→confirmed, etc.) to LLM text chunks before they reach Soniox — chat transcript untouched. Also fires `OrderConfirmedMessage` or `TransferCallMessage` after TTS audio finishes playing.
+- `QueryParams` — parses `language`, `voice`, `audio_in_format`, `caller_phone`, `phone`, `skip_opening_greeting`
 - STT language hints are dynamic: English → `["en"]`, Hindi → `["hi", "en"]`, Punjabi → `["pa", "hi", "en"]`
 - STT context includes domain hints + all 80+ menu item names for better recognition
 
@@ -101,15 +101,13 @@ await session.run()
 - `/incoming-call` — returns TwiML to stream audio to `/media-stream`; extracts `From` (caller phone) and passes it as `?caller_phone=` to voice bot
 - `/media-stream` — WebSocket: bridges Twilio audio ↔ voice bot, handles barge-in and call transfer
 - `/transfer-twiml` — TwiML for redirecting call to `OWNER_PHONE_NUMBER`
-- Cached opening greeting: if `OPENING_GREETING_AUDIO_PATH` is set, plays pre-generated WAV immediately on call start (bypasses TTS latency for first message)
+- Phone greeting: `phone=true` param tells voice server to TTS the English language-selection greeting ("Hi! This is Sierra…") and wait for caller to choose English / Hindi / Punjabi before ordering begins. TTS is forced to English for this greeting regardless of `VOICE_BOT_LANGUAGE`.
 
 ### `twilio/generate_opening_greeting.py`
-One-off script to pre-generate the opening greeting as a WAV file using Soniox TTS. Run once, commit the file, set `OPENING_GREETING_AUDIO_PATH` in `.env`.
+One-off script to pre-generate an opening greeting WAV via Soniox TTS (kept for reference; WAV playback is no longer wired into the bridge).
 
-```bash
-python generate_opening_greeting.py
-# Writes: assets/opening_greeting.wav
-```
+### `server/tts_substitutions.py`
+Word substitution map applied to all TTS-bound text. Maps Punjabi/Hindi words that Canadian Punjabi speakers never say in Punjabi ("ਮਦਦ"→help, "ਪੁਸ਼ਟੀ"→confirmed, "ਸਮੱਸਿਆ"→problem, "ਖਾਸ"→special, "ਹਦਾਇਤਾਂ"→instructions, etc.) to English. Covers Gurmukhi, Devanagari, and romanized fallbacks. To add a word: append one tuple to `TTS_WORD_SUBSTITUTIONS`. Chat transcript and LLM context are never modified.
 
 ### `frontend/src/components/conversation.tsx` — Main UI orchestrator
 Manages the WebSocket connection, microphone, audio playback, and the 3-column layout. Also contains inline: `OrderColumn`, `SierraFloat`, `ReceiptCard`, `StatusDot`.
@@ -261,8 +259,6 @@ TWILIO_ACCOUNT_SID=...
 TWILIO_AUTH_TOKEN=...
 OWNER_PHONE_NUMBER=+1...         # where to transfer calls
 NGROK_URL=https://xxxx.ngrok.io  # your ngrok URL
-OPENING_GREETING_AUDIO_PATH=     # optional — path to pre-generated WAV
-
 # frontend/.env
 VITE_SONIOX_VOICE_BOT_WS_URL=ws://localhost:8765
 ```
@@ -278,7 +274,8 @@ VITE_SONIOX_VOICE_BOT_WS_URL=ws://localhost:8765
 | No caller ID | Caller phone from Twilio `From` header → system prompt |
 | No order confirmation events | `OrderConfirmedMessage` fires after TTS, received by frontend |
 | No call transfer | Full transfer to owner via Twilio REST API |
-| No cached greeting | Pre-generated WAV greeting (zero TTS latency on first message) |
+| No phone greeting logic | `phone=true` param: voice server TTS speaks English language-selection greeting; caller picks language; TTS switches automatically |
+| No TTS word filter | `server/tts_substitutions.py`: Punjabi/Hindi → English word map at TTS layer; chat transcript unaffected; add words by editing one file |
 | Generic frontend | Parkash Sweets branded: 3-col layout, menu panel, receipt card, Sierra avatar |
 | No real-time order parsing | `parseOrderFromBotMessages()` + local fallback receipt |
 | `stt-rt-v4` default | Upgraded to `stt-rt-v5` (June 2026) — better accented speech + code-switching |
