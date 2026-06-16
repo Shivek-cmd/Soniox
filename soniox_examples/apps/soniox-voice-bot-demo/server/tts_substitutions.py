@@ -67,6 +67,34 @@ TTS_WORD_SUBSTITUTIONS: list[tuple[str, str]] = [
     ("हिदायतें",            "instructions"),
     ("निर्देश",             "instructions"),
 
+    # ── Gurmukhi — spice / food modifiers ────────────────────────────────────
+    ("ਮਸਾਲਾ",             "spice"),
+    ("ਮਸਾਲੇ",             "spice"),
+    ("ਤਿੱਖਾ",              "spicy"),
+    ("ਤਿੱਖੀ",              "spicy"),
+    ("ਹਲਕਾ",              "mild"),
+    ("ਹਲਕੀ",              "mild"),
+    ("ਜ਼ਿਆਦਾ",             "extra"),
+    ("ਥੋੜਾ",               "a little"),
+    ("ਘੱਟ",                "less"),
+    ("ਨਮਕ",               "salt"),
+    ("ਬਿਨਾਂ",              "without"),
+    ("ਬਿਨਾ",               "without"),
+
+    # ── Devanagari — spice / food modifiers ──────────────────────────────────
+    ("मसाला",             "spice"),
+    ("मसाले",             "spice"),
+    ("तीखा",              "spicy"),
+    ("तीखी",              "spicy"),
+    ("हल्का",             "mild"),
+    ("हल्की",             "mild"),
+    ("ज़्यादा",            "extra"),
+    ("ज्यादा",             "extra"),
+    ("थोड़ा",              "a little"),
+    ("कम",                "less"),
+    ("नमक",               "salt"),
+    ("बिना",               "without"),
+
     # ── Romanized fallbacks ───────────────────────────────────────────────────
     # Guards against the LLM slipping out of native script
     ("madad",             "help"),
@@ -83,6 +111,14 @@ TTS_WORD_SUBSTITUTIONS: list[tuple[str, str]] = [
     ("hadayat",           "instructions"),
     ("hidayat",           "instructions"),
     ("nirdesh",           "instructions"),
+    ("masala",            "spice"),
+    ("teekha",            "spicy"),
+    ("teekhi",            "spicy"),
+    ("halka",             "mild"),
+    ("halki",             "mild"),
+    ("zyada",             "extra"),
+    ("thoda",             "a little"),
+    ("namak",             "salt"),
 ]
 
 # ── Regex helpers ─────────────────────────────────────────────────────────────
