@@ -57,7 +57,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
 
-SONIOX_STT_MODEL = os.getenv("SONIOX_STT_MODEL") or "stt-rt-v4"
+SONIOX_STT_MODEL = os.getenv("SONIOX_STT_MODEL") or "stt-rt-v5"
 SONIOX_TTS_MODEL = os.getenv("SONIOX_TTS_MODEL") or "tts-rt-v1"
 
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE") or "0.85")

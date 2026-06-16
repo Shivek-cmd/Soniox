@@ -297,7 +297,7 @@ All variables are in root `.env` and substituted by `docker-compose.yml`.
 ### voice-server
 ```env
 SONIOX_API_KEY=...
-SONIOX_STT_MODEL=stt-rt-v4
+SONIOX_STT_MODEL=stt-rt-v5
 SONIOX_TTS_MODEL=tts-rt-v1
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-4o-mini

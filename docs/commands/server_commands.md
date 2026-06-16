@@ -46,7 +46,7 @@ Paste the following (fill in all `your_*` placeholders):
 ```env
 # ── Soniox ───────────────────────────────────────────────────────────────────
 SONIOX_API_KEY=your_soniox_key
-SONIOX_STT_MODEL=stt-rt-v4
+SONIOX_STT_MODEL=stt-rt-v5
 SONIOX_TTS_MODEL=tts-rt-v1
 
 # ── OpenAI ───────────────────────────────────────────────────────────────────

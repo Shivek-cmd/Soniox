@@ -34,6 +34,7 @@ class STTProcessor(MessageProcessor):
         language_hints: list[str] | None = None,
         context: str | None = None,
         max_endpoint_delay_ms: int = 500,
+        endpoint_sensitivity: float | None = None,
     ):
         """
         Initialize the STT processor.
@@ -65,6 +66,7 @@ class STTProcessor(MessageProcessor):
         self._language_hints = language_hints
         self._context = context
         self._max_endpoint_delay_ms = max_endpoint_delay_ms
+        self._endpoint_sensitivity = endpoint_sensitivity
 
         self._websocket = None
         self._receive_task = None
@@ -101,6 +103,8 @@ class STTProcessor(MessageProcessor):
             "language_hints": self._language_hints,
             "context": self._context,
         }
+        if self._endpoint_sensitivity is not None:
+            config["endpoint_sensitivity"] = self._endpoint_sensitivity
 
         # Set the audio format
         if (

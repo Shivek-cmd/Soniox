@@ -117,7 +117,7 @@ ulaw   = audioop.lin2ulaw(pcm_8k, 2)
 
 | Model | Notes |
 |-------|-------|
-| `stt-rt-v4` | Current — what we use |
+| `stt-rt-v5` | Current — what we use (launched June 16 2026, v4 retires June 30) |
 
 ## TTS Models
 
