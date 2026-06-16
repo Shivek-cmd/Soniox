@@ -45,10 +45,21 @@
       "WebFetch(domain:csiworks.net)",
       "WebFetch(domain:www.clover.com)",
       "WebFetch(domain:payplaxe.com)",
-      "WebFetch(domain:www.scale4clover.com)"
+      "WebFetch(domain:www.scale4clover.com)",
+      "PowerShell(Get-PSDrive C | Select-Object Used, Free, @{N='UsedGB';E={[math]::Round\\($_.Used/1GB,2\\)}}, @{N='FreeGB';E={[math]::Round\\($_.Free/1GB,2\\)}}, @{N='TotalGB';E={[math]::Round\\(\\($_.Used+$_.Free\\)/1GB,2\\)}})",
+      "PowerShell(wsl --unregister Ubuntu 2>&1)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "PowerShell(gh auth status)",
+      "mcp__claude_ai_Soniox__soniox_docs_summary",
+      "mcp__claude_ai_Soniox__soniox_search_docs",
+      "mcp__claude_ai_Soniox__soniox_read_page",
+      "Bash(git merge *)",
+      "Bash(git branch *)"
     ],
     "additionalDirectories": [
-      "C:\\Users\\shive\\.claude"
+      "C:\\Users\\shive\\.claude",
+      "D:\\Chrishan Solution"
     ]
   }
 }
