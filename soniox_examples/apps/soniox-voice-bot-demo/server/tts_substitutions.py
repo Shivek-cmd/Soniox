@@ -38,6 +38,12 @@ TTS_WORD_SUBSTITUTIONS: list[tuple[str, str]] = [
     # "intazaar" — "wait" is universally used
     ("ਇੰਤਜ਼ਾਰ",            "wait"),
     ("ਇੰਤਜਾਰ",             "wait"),
+    # "khaas" — always "special" in ordering context
+    ("ਖਾਸ",               "special"),
+    # "hadayatan / hadayat" — always "instructions"
+    ("ਹਦਾਇਤਾਂ",            "instructions"),
+    ("ਹਦਾਇਤਾ",             "instructions"),
+    ("ਹਦਾਇਤ",              "instructions"),
 
     # ── Devanagari (Hindi) ────────────────────────────────────────────────────
     ("मदद",               "help"),
@@ -52,6 +58,14 @@ TTS_WORD_SUBSTITUTIONS: list[tuple[str, str]] = [
     ("रकम",               "amount"),
     ("इंतज़ार",             "wait"),
     ("इंतजार",             "wait"),
+    # "vishesh / khaas" — always "special"
+    ("विशेष",              "special"),
+    ("ख़ास",               "special"),
+    ("खास",               "special"),
+    # "hidayat / nirdesh" — always "instructions"
+    ("हिदायत",             "instructions"),
+    ("हिदायतें",            "instructions"),
+    ("निर्देश",             "instructions"),
 
     # ── Romanized fallbacks ───────────────────────────────────────────────────
     # Guards against the LLM slipping out of native script
@@ -65,6 +79,10 @@ TTS_WORD_SUBSTITUTIONS: list[tuple[str, str]] = [
     ("keemat",            "price"),
     ("rakam",             "amount"),
     ("intazaar",          "wait"),
+    ("khaas",             "special"),
+    ("hadayat",           "instructions"),
+    ("hidayat",           "instructions"),
+    ("nirdesh",           "instructions"),
 ]
 
 # ── Regex helpers ─────────────────────────────────────────────────────────────
