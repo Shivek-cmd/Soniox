@@ -93,6 +93,7 @@ class AnthropicLLMProcessor(MessageProcessor):
         self._opening_greeting = opening_greeting or OPENING_GREETING
         self._current_language: str = initial_language
         self._active_task: asyncio.Task | None = None
+        self._generation: int = 0  # incremented each time a new LLM task is created
         self._awaiting_language_selection = not language_preselected
         self._user_speech_started = False
         self._recent_assistant_texts: list[str] = []
@@ -151,12 +152,14 @@ class AnthropicLLMProcessor(MessageProcessor):
             # causing the "stream already closed" error and audio cuts.
             if self._active_task and not self._active_task.done():
                 self._active_task.cancel()
+            self._generation += 1  # invalidate any in-flight response that still completes
             self._active_task = asyncio.create_task(self._generate_llm_response())
 
         elif isinstance(message, UserSpeechStartMessage):
             self._user_speech_started = True
             if self._active_task and not self._active_task.done():
                 self._active_task.cancel()
+            self._generation += 1  # discard any response already in-flight
 
     # ── Message history helpers ───────────────────────────────────────────────
 
@@ -269,6 +272,7 @@ class AnthropicLLMProcessor(MessageProcessor):
         if not self._messages or self._messages[-1]["role"] == "assistant":
             return
 
+        my_gen = self._generation  # snapshot — if superseded, _generation will be higher
         last_msg = self._messages[-1]
         self.log.info("User → LLM", text=(str(last_msg.get("content") or ""))[:200])
 
@@ -276,7 +280,7 @@ class AnthropicLLMProcessor(MessageProcessor):
         self._first_token_sent = False
 
         try:
-            await self._stream_response()
+            await self._stream_response(my_gen)
         except asyncio.CancelledError:
             self.log.debug("LLM generation task was cancelled")
         except Exception as e:
@@ -286,9 +290,12 @@ class AnthropicLLMProcessor(MessageProcessor):
         finally:
             self._active_task = None
 
-    async def _stream_response(self):
+    async def _stream_response(self, my_gen: int):
         full_text = ""
         _filler_sent = False
+
+        def _is_current() -> bool:
+            return my_gen == self._generation
 
         async with self._client.messages.stream(
             model=self._model,
@@ -309,7 +316,7 @@ class AnthropicLLMProcessor(MessageProcessor):
                     block = event.content_block
                     if block.type == "tool_use":
                         # Fire filler immediately so there's no dead air
-                        if not _filler_sent and self._send_message:
+                        if not _filler_sent and self._send_message and _is_current():
                             filler = random.choice(
                                 TOOL_CALL_FILLERS.get(
                                     self._current_language,
@@ -328,11 +335,12 @@ class AnthropicLLMProcessor(MessageProcessor):
                     if delta.type == "text_delta":
                         text = delta.text
                         if text:
-                            if not self._first_token_sent and self._llm_start_time:
+                            if not self._first_token_sent and self._llm_start_time and _is_current():
                                 self._first_token_sent = True
                                 first_token_ms = (time.perf_counter() - self._llm_start_time) * 1000
                                 await self._send_message(MetricsMessage("llm_first_token_ms", first_token_ms))
-                            await self._send_message(LLMChunkMessage(text))
+                            if _is_current():
+                                await self._send_message(LLMChunkMessage(text))
                             self._append_assistant_text(text)
                             full_text += text
                     elif delta.type == "input_json_delta":
@@ -374,18 +382,21 @@ class AnthropicLLMProcessor(MessageProcessor):
             # Add all tool results in one user message
             self._messages.append({"role": "user", "content": tool_results})
 
-            # Recurse for LLM's follow-up response
-            await self._stream_response()
+            # Recurse for LLM's follow-up response (only if still the current generation)
+            if not _is_current():
+                return
+            await self._stream_response(my_gen)
             return
 
         # No tool calls — finalize
         if full_text:
             self.log.info("Sierra → User", text=full_text[:300])
             self._remember_assistant_text(full_text)
-            await self._send_message(LLMFullMessage(full_text))
-            if self._llm_start_time:
-                total_ms = (time.perf_counter() - self._llm_start_time) * 1000
-                await self._send_message(MetricsMessage("llm_total_ms", total_ms))
+            if _is_current():
+                await self._send_message(LLMFullMessage(full_text))
+                if self._llm_start_time:
+                    total_ms = (time.perf_counter() - self._llm_start_time) * 1000
+                    await self._send_message(MetricsMessage("llm_total_ms", total_ms))
 
     async def _call_tool(self, block: dict) -> str:
         name = block["name"]
