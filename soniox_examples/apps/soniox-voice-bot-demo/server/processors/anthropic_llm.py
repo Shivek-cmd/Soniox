@@ -289,7 +289,6 @@ class AnthropicLLMProcessor(MessageProcessor):
             messages=self._messages,
             tools=self._anthropic_tools,
             max_tokens=self._max_tokens,
-            temperature=self._temperature,
         ) as stream:
             # Collect tool_use blocks as we go
             tool_use_blocks: list[dict] = []
