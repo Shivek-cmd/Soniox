@@ -380,6 +380,7 @@ class AnthropicLLMProcessor(MessageProcessor):
 
         # No tool calls — finalize
         if full_text:
+            self.log.info("Sierra → User", text=full_text[:300])
             self._remember_assistant_text(full_text)
             await self._send_message(LLMFullMessage(full_text))
             if self._llm_start_time:

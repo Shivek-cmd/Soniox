@@ -379,3 +379,25 @@ docker compose up -d --build
 docker compose ps
 docker compose logs -f
 ```
+
+---
+
+## Debug Live Call Logs
+
+Watch everything from voice-server live:
+
+```bash
+docker compose logs voice-server -f
+```
+
+Filtered view — only errors, LLM input/output, and TTS events:
+
+```bash
+docker compose logs voice-server -f 2>&1 | grep -E "error|User → LLM|Sierra → User|llm_first|transcription|user_speech|tts\."
+```
+
+Use when:
+
+- You are on a live call and want to see what Sierra hears and speaks
+- You want to catch TTS errors or double LLM triggers
+- `User → LLM` shows what the customer said; `Sierra → User` shows what Sierra replied
