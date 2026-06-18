@@ -144,6 +144,13 @@ class AnthropicLLMProcessor(MessageProcessor):
                     return
                 await self._handle_language_selection(language)
                 return
+            # Cancel any in-flight task before creating a new one.
+            # Soniox can fire TranscriptionEndpointMessage twice per utterance
+            # (manual VAD finalize + automatic endpoint detection) — without this
+            # guard, two LLM tasks run simultaneously and both write to TTS,
+            # causing the "stream already closed" error and audio cuts.
+            if self._active_task and not self._active_task.done():
+                self._active_task.cancel()
             self._active_task = asyncio.create_task(self._generate_llm_response())
 
         elif isinstance(message, UserSpeechStartMessage):
