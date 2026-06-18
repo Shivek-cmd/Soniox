@@ -18,7 +18,9 @@ from websockets.asyncio.server import serve
 from languages import LANGUAGES, LANGUAGES_MAP
 from messages import ErrorMessage, LLMChunkMessage, OrderConfirmedMessage, TransferCallMessage
 from tts_substitutions import apply_tts_substitutions
-from processors.llm import LLMProcessor, OPENING_GREETING, OPENING_GREETINGS
+# from processors.llm import LLMProcessor, OPENING_GREETING, OPENING_GREETINGS  # OpenAI — kept for easy revert
+from processors.anthropic_llm import AnthropicLLMProcessor
+from processors.llm import OPENING_GREETING, OPENING_GREETINGS
 from processors.message_processor import MessageProcessor
 from processors.stt import STTProcessor
 from processors.tts import TTSProcessor
@@ -55,8 +57,10 @@ WEBSOCKET_PORT = int(os.getenv("WEBSOCKET_PORT", "8765"))
 
 SONIOX_API_KEY = os.getenv("SONIOX_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL") or "claude-opus-4-8"
 
 SONIOX_STT_MODEL = os.getenv("SONIOX_STT_MODEL") or "stt-rt-v5"
 SONIOX_TTS_MODEL = os.getenv("SONIOX_TTS_MODEL") or "tts-rt-v1"
@@ -300,14 +304,30 @@ async def handle(websocket: ServerConnection):
             language_hints=stt_hints,
             context=STT_CONTEXT,
         ),
-        LLMProcessor(
-            api_key=OPENAI_API_KEY,
-            model=OPENAI_MODEL,
-            # Language-detection mode is active when:
-            #   phone=True  — TTS speaks the language-selector greeting; caller picks English/Hindi/Punjabi
-            #   skip_opening_greeting=True  — legacy WAV path (kept for reverting)
-            # In both cases: system_message="auto", language_preselected=False.
-            # Browser flow (phone=False, skip_opening_greeting=False): language pre-selected in UI.
+        # LLMProcessor(                          # ← OpenAI GPT-4o-mini (kept for easy revert)
+        #     api_key=OPENAI_API_KEY,
+        #     model=OPENAI_MODEL,
+        #     system_message=get_system_message(
+        #         "auto" if (params.phone or params.skip_opening_greeting) else LANGUAGES_MAP[params.language],
+        #         caller_phone=params.caller_phone,
+        #         pos_client=state.pos_client,
+        #     ),
+        #     tools=get_tools(state),
+        #     temperature=LLM_TEMPERATURE,
+        #     max_tokens=LLM_MAX_TOKENS,
+        #     on_language_selected=select_language_without_llm,
+        #     send_opening_greeting=not params.skip_opening_greeting,
+        #     opening_greeting=(
+        #         OPENING_GREETING
+        #         if params.phone
+        #         else OPENING_GREETINGS.get(initial_language, OPENING_GREETINGS["english"])
+        #     ),
+        #     language_preselected=not (params.phone or params.skip_opening_greeting),
+        #     initial_language=initial_language,
+        # ),
+        AnthropicLLMProcessor(
+            api_key=ANTHROPIC_API_KEY,
+            model=ANTHROPIC_MODEL,
             system_message=get_system_message(
                 "auto" if (params.phone or params.skip_opening_greeting) else LANGUAGES_MAP[params.language],
                 caller_phone=params.caller_phone,
