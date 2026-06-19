@@ -86,10 +86,17 @@ FastAPI app on port 5050.
 
 Responsibilities:
 - Receives Twilio webhooks at `/incoming-call`, `/transfer-twiml`, `/media-stream`
-- Opens an internal WebSocket to `voice-server:8765` per call
-- Forwards caller audio to voice server; converts bot audio (PCM 24kHz → mulaw 8kHz) back to Twilio
+- Opens an internal WebSocket to `voice-server:8765` per call with `audio_out_format=pcm_mulaw&audio_out_sample_rate=8000` — Soniox TTS outputs mulaw 8kHz natively so the bridge forwards audio bytes to Twilio with **zero conversion** (no resampler, no format converter)
+- Forwards caller audio (mulaw 8kHz from Twilio) directly to voice server unchanged
 - Receives Clover inventory webhooks at `/clover-webhook`, validates HMAC, pings `voice-server:8765/internal/clover-reload`
 - Handles call transfer and barge-in
+
+**Audio pipeline (phone):**
+```
+Twilio → mulaw 8kHz → voice-server (STT)
+voice-server (TTS) → mulaw 8kHz → Twilio   ← no conversion, Soniox outputs this natively
+```
+`audioop` is no longer used. The `audioop-lts` dependency has been removed from `twilio/pyproject.toml`.
 
 Key env vars:
 ```env
@@ -182,9 +189,9 @@ Caddy → twilio-bridge /media-stream
   v
 voice-server (new Session)
   |
-  | VAD → Soniox STT → OpenAI LLM → Soniox TTS
+  | VAD → Soniox STT → OpenAI LLM → Soniox TTS (outputs pcm_mulaw 8kHz)
   v
-twilio-bridge (PCM 24kHz → mulaw 8kHz → Twilio mark/media events)
+twilio-bridge (forwards mulaw bytes directly → Twilio mark/media events)
   |
   v
 Customer hears the agent
