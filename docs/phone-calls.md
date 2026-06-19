@@ -58,16 +58,17 @@ if message["type"] == "transcription":
 ## Audio Conversion in Bridge
 
 ```python
-import audioop
-
 # Voice bot outputs PCM 24kHz → Twilio needs mulaw 8kHz
-pcm_8k = audioop.ratecv(pcm_24k, 2, 1, 24000, 8000, None)[0]
+# _ratecv_state is carried across chunks — passing None every call resets the
+# interpolation filter at chunk boundaries and causes audible pops/clicks.
+_ratecv_state = None
+...
+pcm_8k, _ratecv_state = audioop.ratecv(pcm_24k, 2, 1, 24000, 8000, _ratecv_state)
 ulaw = audioop.lin2ulaw(pcm_8k, 2)
 audio_payload = base64.b64encode(ulaw).decode("utf-8")
 ```
 
-Note: `audioop` was removed in Python 3.13 standard library.
-The demo uses `audioop-lts` package which brings it back for Python 3.13.
+Note: `audioop` was removed from the Python 3.13 standard library. The twilio bridge uses the `audioop-lts` community package (in `twilio/pyproject.toml`) which restores the same API for Python 3.13. The voice server uses a pure-numpy μ-law decoder instead (`_mulaw_to_int16` in `server/processors/vad.py`).
 
 ---
 
@@ -76,8 +77,12 @@ The demo uses `audioop-lts` package which brings it back for Python 3.13.
 ```
 PORT=5050
 SONIOX_VOICE_BOT_WS_URL=ws://localhost:8765   # voice bot server
-VOICE_BOT_LANGUAGE=pa                          # pa = Punjabi
-VOICE_BOT_VOICE=female_1                       # voice for TTS
+VOICE_BOT_LANGUAGE=pa                          # pa = Punjabi (initial language hint)
+VOICE_BOT_VOICE=Maya                           # Soniox TTS voice
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+OWNER_PHONE_NUMBER=...                         # call transfer destination
+NGROK_URL=https://voice.bizbull.ai             # public base URL (for transfer TwiML)
 ```
 
 ---

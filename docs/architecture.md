@@ -275,11 +275,22 @@ await session.run()
 ### 1. `VADProcessor`
 File: `server/processors/vad.py` — Silero VAD. Detects speech start/end. Enables barge-in.
 
+- Accepts `audio_format` param. Phone calls send μ-law 8kHz; VAD decodes to int16 PCM via numpy (`_mulaw_to_int16`) before Silero processes it. Without this, mulaw bytes interpreted as 16-bit PCM appear near-zero → VAD sees only silence and misfires on phone calls.
+- `threshold=0.5`, `min_silence_duration_ms=300`
+- Only emits `UserSpeechStartMessage` (barge-in) and `UserSpeechEndMessage`; STT no longer acts on `UserSpeechEndMessage`.
+
 ### 2. `STTProcessor`
-File: `server/processors/stt.py` — Streams audio to Soniox real-time STT (`stt-rt-v5`). Language hints: `["pa", "hi", "en"]`. Key optimizations: `max_endpoint_delay_ms=500` (4× faster than default), manual VAD finalization via `{"type": "finalize"}` on silence, enriched STT context (6 general keys + all menu terms auto-built from POS), `endpoint_sensitivity` param wired for v5 tuning.
+File: `server/processors/stt.py` — Streams audio to Soniox real-time STT (`stt-rt-v5`).
+
+- Language hints: `["pa", "hi", "en"]` (Punjabi), `["hi", "en"]` (Hindi), `["en"]` (English).
+- Enriched STT context: 6 general keys (restaurant, location, setting, domain, topic, language) + all menu terms auto-built from POS.
+- **Endpoint detection only** — no manual `{"type": "finalize"}` sent from VAD. Soniox semantic endpoint detection alone decides when the speaker is done (avoids the double-`TranscriptionEndpointMessage` that caused two simultaneous LLM calls).
+- Endpoint tuning: `endpoint_latency_adjustment_level=2`, `endpoint_sensitivity=0.3`, `max_endpoint_delay_ms=1200`.
 
 ### 3. `LLMProcessor`
 File: `server/processors/llm.py` — Sends transcriptions to OpenAI, streams response to TTS. Calls tools (`place_order`, `get_menu`, `check_item_availability`, `select_language`, `transfer_call`).
+
+- **Generation counter** (`self._generation`) — incremented on every new transcript endpoint or barge-in. Each LLM task captures `my_gen` at start and checks it before every `send_message`. Stale in-flight responses (e.g. from a cancelled task that completed before the cancel arrived) are silently dropped.
 
 ### 4. `DynamicTTSProcessor`
 Defined in: `server/main.py`
@@ -290,6 +301,7 @@ Defined in: `server/main.py`
 - **Keepalive**: sends `{"keep_alive": true}` every 20s when idle — prevents Soniox idle timeout
 - **Cancel on barge-in**: sends `{"stream_id": "...", "cancel": true}` — stops synthesis instantly
 - **Error handling**: branches on `error_type` (stable) not `error_message`
+- **Opening greeting protection**: suppresses `UserSpeechStartMessage` for 8 seconds after session start (or until the first TTS stream finishes). Phone line noise fires VAD immediately on call connect; without this, the opening greeting is killed before Sierra finishes speaking.
 - **TTS word substitution**: intercepts `LLMChunkMessage` before Soniox TTS — maps Punjabi/Hindi words (ਮਦਦ→help, ਪੁਸ਼ਟੀ→confirmed, ਸਮੱਸਿਆ→problem, etc.) to the English equivalents Canadian Punjabi speakers naturally use. Edit `server/tts_substitutions.py` to add words — chat transcript is never affected.
 
 ---
@@ -306,7 +318,7 @@ SONIOX_TTS_MODEL=tts-rt-v1
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-4o-mini
 LLM_TEMPERATURE=0.85
-LLM_MAX_TOKENS=200
+LLM_MAX_TOKENS=120
 N8N_WEBHOOK_URL=...
 WEBSOCKET_HOST=0.0.0.0
 WEBSOCKET_PORT=8765
