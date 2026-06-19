@@ -9,6 +9,18 @@ from messages import UserAudioMessage, UserSpeechEndMessage, UserSpeechStartMess
 from processors.message_processor import MessageProcessor
 
 
+def _mulaw_to_int16(mulaw_bytes: bytes) -> np.ndarray:
+    """Decode 8-bit μ-law (G.711) bytes to int16 PCM (audioop-free, Python 3.13+)."""
+    u = np.frombuffer(mulaw_bytes, dtype=np.uint8).astype(np.int32)
+    u = (~u) & 0xFF
+    sign = (u >> 7) & 1
+    exp = (u >> 4) & 0x07
+    mantissa = u & 0x0F
+    linear = ((mantissa | 0x10) << (exp + 3)) - 132
+    linear = np.where(sign, -linear, linear)
+    return linear.astype(np.int16)
+
+
 class VADProcessor(MessageProcessor):
     """Voice Activity Detection processor using Silero VAD model.
 
@@ -40,18 +52,12 @@ class VADProcessor(MessageProcessor):
         sample_rate: int = 16000,
         threshold: float = 0.5,
         min_silence_duration_ms: int = 300,
+        audio_format: str = "pcm_s16le",
     ):
-        """
-        Initialize VAD processor using Silero VAD.
-
-        Args:
-            sample_rate: Audio sample rate (must be 8000 or 16000)
-            threshold: Speech probability threshold (0-1)
-            min_silence_duration_ms: Silence duration to trigger end
-        """
         self._sample_rate = sample_rate
         self._threshold = threshold
         self._min_silence_duration_ms = min_silence_duration_ms
+        self._audio_format = audio_format
 
         VADProcessor.warmup()
 
@@ -110,8 +116,14 @@ class VADProcessor(MessageProcessor):
                     await self._send_message(UserSpeechEndMessage())
 
     def _convert_to_float32(self, audio_bytes: bytes) -> np.ndarray:
-        """Convert 16-bit PCM to float32 normalized [-1, 1]."""
-        audio_int16 = np.frombuffer(audio_bytes, dtype=np.int16)
+        """Convert audio bytes to float32 normalized [-1, 1]."""
+        if self._audio_format == "mulaw":
+            # μ-law is 8-bit encoded; must decode to int16 before normalizing.
+            # Without this, frombuffer(dtype=int16) interprets 8-bit values as
+            # 16-bit LSBs → near-zero amplitudes → VAD sees only silence on phone calls.
+            audio_int16 = _mulaw_to_int16(audio_bytes)
+        else:
+            audio_int16 = np.frombuffer(audio_bytes, dtype=np.int16)
         return audio_int16.astype(np.float32) / 32768.0
 
     def _combine_chunks(self, num_samples: int) -> np.ndarray:

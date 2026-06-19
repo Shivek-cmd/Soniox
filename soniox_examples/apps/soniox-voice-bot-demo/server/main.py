@@ -306,6 +306,7 @@ async def handle(websocket: ServerConnection):
     processors: List[MessageProcessor] = [
         VADProcessor(
             sample_rate=params.audio_in_sample_rate,
+            audio_format=params.audio_in_format,
         ),
         STTProcessor(
             api_key=SONIOX_API_KEY,
@@ -315,6 +316,9 @@ async def handle(websocket: ServerConnection):
             num_channels=params.audio_in_num_channels,
             language_hints=stt_hints,
             context=STT_CONTEXT,
+            endpoint_latency_adjustment_level=2,
+            endpoint_sensitivity=0.3,
+            max_endpoint_delay_ms=1200,
         ),
         LLMProcessor(
             api_key=OPENAI_API_KEY,

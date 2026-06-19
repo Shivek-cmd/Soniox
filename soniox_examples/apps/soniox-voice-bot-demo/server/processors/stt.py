@@ -8,8 +8,6 @@ from messages import (
     TranscriptionEndpointMessage,
     TranscriptionMessage,
     UserAudioMessage,
-    UserSpeechEndMessage,
-    UserSpeechStartMessage,
 )
 from processors.message_processor import MessageProcessor
 
@@ -35,26 +33,8 @@ class STTProcessor(MessageProcessor):
         context: str | None = None,
         max_endpoint_delay_ms: int = 500,
         endpoint_sensitivity: float | None = None,
+        endpoint_latency_adjustment_level: int = 2,
     ):
-        """
-        Initialize the STT processor.
-
-        Args:
-            api_key (str): The API key for the Soniox STT API.
-            api_host (str, optional): The host for the Soniox STT API.
-                Defaults to "wss://stt-rt.soniox.com/transcribe-websocket".
-            audio_format (str): The audio format to use. Defaults to "pcm_s16le".
-                All supported audio formats are listed here:
-                https://soniox.com/docs/stt/rt/real-time-transcription#audio-formats
-            audio_sample_rate (int, optional): The sample rate to use for audio transcription. Defaults to 16000.
-                Relevant only for raw audio formats.
-            num_channels (int, optional): The number of channels to use for audio transcription. Defaults to 1.
-                Relevant only for raw audio formats.
-            language_hints (list[str], optional): A list of language hints to use for speech recognition. Learn
-                more about language hints here: https://soniox.com/docs/stt/rt/real-time-transcription#language-hints
-            context (str, optional): A context string for improving speech recognition. Learn more about context
-                here: https://soniox.com/docs/stt/concepts/context
-        """
         self._api_key = api_key
         self._api_host = api_host
         self._model = model
@@ -67,6 +47,7 @@ class STTProcessor(MessageProcessor):
         self._context = context
         self._max_endpoint_delay_ms = max_endpoint_delay_ms
         self._endpoint_sensitivity = endpoint_sensitivity
+        self._endpoint_latency_adjustment_level = endpoint_latency_adjustment_level
 
         self._websocket = None
         self._receive_task = None
@@ -76,7 +57,6 @@ class STTProcessor(MessageProcessor):
 
         self._send_message = None
         self._alive = False
-        self._utterance_finalized = False  # prevents duplicate finalize per utterance
 
     async def start(
         self,
@@ -97,6 +77,7 @@ class STTProcessor(MessageProcessor):
             "api_key": self._api_key,
             "model": self._model,
             "enable_endpoint_detection": True,
+            "endpoint_latency_adjustment_level": self._endpoint_latency_adjustment_level,
             "max_endpoint_delay_ms": self._max_endpoint_delay_ms,
             "enable_non_final_tokens": True,
             "enable_language_identification": True,
@@ -163,22 +144,6 @@ class STTProcessor(MessageProcessor):
                 self._send_queue.put_nowait(message.audio_data())
             except asyncio.QueueFull:
                 self.log.debug("STT send queue full, dropping audio")
-
-        elif isinstance(message, UserSpeechStartMessage):
-            # Reset flag so the next speech end can trigger a fresh finalize.
-            self._utterance_finalized = False
-
-        elif isinstance(message, UserSpeechEndMessage):
-            # VAD detected silence — finalize immediately instead of waiting
-            # for Soniox's own endpoint detection (which defaults to 2000ms).
-            # Guard prevents duplicate finalize messages for the same utterance.
-            if self._websocket and not self._utterance_finalized:
-                self._utterance_finalized = True
-                try:
-                    await self._websocket.send(json.dumps({"type": "finalize"}))
-                    self.log.debug("stt.manual_finalize")
-                except websockets.exceptions.ConnectionClosed:
-                    pass
 
     async def _send_task_handler(self):
         try:
