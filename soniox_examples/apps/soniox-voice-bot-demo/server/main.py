@@ -16,7 +16,7 @@ from websockets import ServerConnection
 from websockets.asyncio.server import serve
 
 from languages import LANGUAGES, LANGUAGES_MAP
-from messages import ErrorMessage, LLMChunkMessage, OrderConfirmedMessage, TransferCallMessage
+from messages import ErrorMessage, LLMChunkMessage, OrderConfirmedMessage, TransferCallMessage, UserSpeechStartMessage
 from tts_substitutions import apply_tts_substitutions
 from processors.llm import LLMProcessor, OPENING_GREETING, OPENING_GREETINGS
 # from processors.anthropic_llm import AnthropicLLMProcessor  # Anthropic — kept for easy revert
@@ -97,6 +97,8 @@ class DynamicTTSProcessor(TTSProcessor):
         super().__init__(**kwargs)
         self._state = state
         self._last_stream_end: float = 0.0
+        self._session_start: float = time.monotonic()
+        self._greeting_done: bool = False
 
     async def start(self, send_message, log):
         # Store callbacks but do NOT open the Soniox WebSocket yet.
@@ -105,6 +107,16 @@ class DynamicTTSProcessor(TTSProcessor):
         # We connect lazily on first actual TTS use instead.
         self.log = log.bind(processor="tts")
         self._send_message = send_message
+
+    async def process(self, message):
+        # Phone line static fires VAD (UserSpeechStartMessage) the instant a call
+        # connects, killing the opening greeting before Sierra finishes speaking.
+        # Suppress it until the greeting has fully played. Real transcribed speech
+        # (TranscriptionMessage) still cancels normally so barge-in works.
+        if isinstance(message, UserSpeechStartMessage) and not self._greeting_done:
+            if time.monotonic() - self._session_start < 8.0:
+                return
+        await super().process(message)
 
     async def _ensure_tts_alive(self):
         """Open (or reopen) the Soniox TTS WebSocket when needed.
@@ -180,6 +192,7 @@ class DynamicTTSProcessor(TTSProcessor):
 
     async def _on_stream_finalized(self):
         self._last_stream_end = time.monotonic()
+        self._greeting_done = True  # first stream done — barge-in suppression lifted
         if self._state.confirmed_order and self._send_message:
             order = self._state.confirmed_order
             self._state.confirmed_order = None

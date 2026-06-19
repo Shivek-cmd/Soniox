@@ -178,6 +178,9 @@ async def handle_media_stream(websocket: WebSocket):
         async def send_to_twilio():
             """Receive events from the voice bot, send audio back to Twilio."""
             nonlocal stream_sid, call_sid
+            # Carry resampler state across chunks — passing None each call resets the
+            # interpolation filter at every chunk boundary, causing audible pops/clicks.
+            _ratecv_state = None
             try:
                 async for message in voicebot_ws:
                     if isinstance(message, str):
@@ -187,6 +190,7 @@ async def handle_media_stream(websocket: WebSocket):
                         if event_type in {"user_speech_start", "transcription"}:
                             # Barge-in: customer started speaking — cut bot audio
                             await handle_speech_started_event()
+                            _ratecv_state = None  # reset resampler after audio gap
 
                         elif event_type == "transfer":
                             reason = event.get("reason", "unknown")
@@ -199,8 +203,9 @@ async def handle_media_stream(websocket: WebSocket):
                         # Raw PCM audio from Soniox TTS (24kHz, 16-bit, mono)
                         pcm_audio_bytes = message
 
-                        # Resample to 8kHz and convert to µ-law for Twilio
-                        pcm_8k = audioop.ratecv(pcm_audio_bytes, 2, 1, 24000, 8000, None)[0]
+                        # Resample to 8kHz and convert to µ-law for Twilio.
+                        # State is carried between chunks for smooth interpolation.
+                        pcm_8k, _ratecv_state = audioop.ratecv(pcm_audio_bytes, 2, 1, 24000, 8000, _ratecv_state)
                         ulaw_audio_bytes = audioop.lin2ulaw(pcm_8k, 2)
 
                         audio_payload = base64.b64encode(ulaw_audio_bytes).decode("utf-8")
