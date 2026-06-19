@@ -194,6 +194,7 @@ class LLMProcessor(MessageProcessor):
         self._opening_greeting = opening_greeting or OPENING_GREETING
         self._current_language: str = initial_language
         self._active_task: asyncio.Task | None = None
+        self._generation: int = 0  # incremented each time a new LLM task is created
         self._awaiting_language_selection = not language_preselected
         self._user_speech_started = False
         self._recent_assistant_texts: list[str] = []
@@ -248,6 +249,7 @@ class LLMProcessor(MessageProcessor):
             # LLM tasks and a TTS "stream already closed" error.
             if self._active_task and not self._active_task.done():
                 self._active_task.cancel()
+            self._generation += 1  # invalidate any in-flight response that still completes
             self._active_task = asyncio.create_task(self._generate_llm_response())
 
         elif isinstance(message, UserSpeechStartMessage):
@@ -255,6 +257,7 @@ class LLMProcessor(MessageProcessor):
             self._user_speech_started = True
             if self._active_task and not self._active_task.done():
                 self._active_task.cancel()
+            self._generation += 1  # discard any response already in-flight
 
     async def cleanup(self):
         if self._active_task and not self._active_task.done():
@@ -414,11 +417,15 @@ class LLMProcessor(MessageProcessor):
             self.log.debug("No new user text, cancelling LLM generation task")
             return
 
+        my_gen = self._generation  # snapshot — if superseded, _generation will be higher
         last_msg = self._messages[-1] if self._messages else {}
         self.log.info("User → LLM", text=(last_msg.get("content") or "")[:200])
 
         self._llm_start_time = time.perf_counter()
         self._first_token_sent = False
+
+        def _is_current() -> bool:
+            return my_gen == self._generation
 
         try:
             full_text = ""
@@ -442,7 +449,7 @@ class LLMProcessor(MessageProcessor):
                     if chunk.choices[0].delta.tool_calls:
                         # Fire filler phrase the moment we know a tool call is coming.
                         # This fills dead air while the tool executes + LLM re-calls.
-                        if not _filler_sent and self._send_message:
+                        if not _filler_sent and self._send_message and _is_current():
                             filler = random.choice(
                                 TOOL_CALL_FILLERS.get(
                                     self._current_language, TOOL_CALL_FILLERS["english"]
@@ -459,7 +466,7 @@ class LLMProcessor(MessageProcessor):
                         # Content - streaming to user
                         text = chunk.choices[0].delta.content
                         if text:
-                            if not self._first_token_sent and self._llm_start_time:
+                            if not self._first_token_sent and self._llm_start_time and _is_current():
                                 self._first_token_sent = True
                                 first_token_ms = (
                                     time.perf_counter() - self._llm_start_time
@@ -468,9 +475,10 @@ class LLMProcessor(MessageProcessor):
                                     MetricsMessage("llm_first_token_ms", first_token_ms)
                                 )
 
-                            message = LLMChunkMessage(text)
-                            await self._send_message(message)
-                            self._append_llm_message(message)
+                            if _is_current():
+                                message = LLMChunkMessage(text)
+                                await self._send_message(message)
+                                self._append_llm_message(message)
 
                             full_text += text
 
@@ -498,8 +506,8 @@ class LLMProcessor(MessageProcessor):
                         )
                     )
 
-                # If there were any tool calls, call the LLM again
-                if tool_calls:
+                # Recurse for follow-up response (only if still the current generation)
+                if tool_calls and _is_current():
                     return await stream_response()
 
             await stream_response()
@@ -507,9 +515,11 @@ class LLMProcessor(MessageProcessor):
             # Send the full aggregated response
             if full_text:
                 self._remember_assistant_text(full_text)
-                await self._send_message(LLMFullMessage(full_text))
-                total_ms = (time.perf_counter() - self._llm_start_time) * 1000
-                await self._send_message(MetricsMessage("llm_total_ms", total_ms))
+                self.log.info("Sierra → User", text=full_text[:300])
+                if _is_current():
+                    await self._send_message(LLMFullMessage(full_text))
+                    total_ms = (time.perf_counter() - self._llm_start_time) * 1000
+                    await self._send_message(MetricsMessage("llm_total_ms", total_ms))
 
         except asyncio.CancelledError:
             self.log.debug("LLM generation task was cancelled")

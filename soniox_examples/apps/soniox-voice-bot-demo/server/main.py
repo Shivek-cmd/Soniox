@@ -18,9 +18,8 @@ from websockets.asyncio.server import serve
 from languages import LANGUAGES, LANGUAGES_MAP
 from messages import ErrorMessage, LLMChunkMessage, OrderConfirmedMessage, TransferCallMessage
 from tts_substitutions import apply_tts_substitutions
-# from processors.llm import LLMProcessor, OPENING_GREETING, OPENING_GREETINGS  # OpenAI — kept for easy revert
-from processors.anthropic_llm import AnthropicLLMProcessor
-from processors.llm import OPENING_GREETING, OPENING_GREETINGS
+from processors.llm import LLMProcessor, OPENING_GREETING, OPENING_GREETINGS
+# from processors.anthropic_llm import AnthropicLLMProcessor  # Anthropic — kept for easy revert
 from processors.message_processor import MessageProcessor
 from processors.stt import STTProcessor
 from processors.tts import TTSProcessor
@@ -304,30 +303,9 @@ async def handle(websocket: ServerConnection):
             language_hints=stt_hints,
             context=STT_CONTEXT,
         ),
-        # LLMProcessor(                          # ← OpenAI GPT-4o-mini (kept for easy revert)
-        #     api_key=OPENAI_API_KEY,
-        #     model=OPENAI_MODEL,
-        #     system_message=get_system_message(
-        #         "auto" if (params.phone or params.skip_opening_greeting) else LANGUAGES_MAP[params.language],
-        #         caller_phone=params.caller_phone,
-        #         pos_client=state.pos_client,
-        #     ),
-        #     tools=get_tools(state),
-        #     temperature=LLM_TEMPERATURE,
-        #     max_tokens=LLM_MAX_TOKENS,
-        #     on_language_selected=select_language_without_llm,
-        #     send_opening_greeting=not params.skip_opening_greeting,
-        #     opening_greeting=(
-        #         OPENING_GREETING
-        #         if params.phone
-        #         else OPENING_GREETINGS.get(initial_language, OPENING_GREETINGS["english"])
-        #     ),
-        #     language_preselected=not (params.phone or params.skip_opening_greeting),
-        #     initial_language=initial_language,
-        # ),
-        AnthropicLLMProcessor(
-            api_key=ANTHROPIC_API_KEY,
-            model=ANTHROPIC_MODEL,
+        LLMProcessor(
+            api_key=OPENAI_API_KEY,
+            model=OPENAI_MODEL,
             system_message=get_system_message(
                 "auto" if (params.phone or params.skip_opening_greeting) else LANGUAGES_MAP[params.language],
                 caller_phone=params.caller_phone,
@@ -346,6 +324,27 @@ async def handle(websocket: ServerConnection):
             language_preselected=not (params.phone or params.skip_opening_greeting),
             initial_language=initial_language,
         ),
+        # AnthropicLLMProcessor(                 # ← Anthropic Claude Opus 4.8 (kept for easy revert)
+        #     api_key=ANTHROPIC_API_KEY,
+        #     model=ANTHROPIC_MODEL,
+        #     system_message=get_system_message(
+        #         "auto" if (params.phone or params.skip_opening_greeting) else LANGUAGES_MAP[params.language],
+        #         caller_phone=params.caller_phone,
+        #         pos_client=state.pos_client,
+        #     ),
+        #     tools=get_tools(state),
+        #     temperature=LLM_TEMPERATURE,
+        #     max_tokens=LLM_MAX_TOKENS,
+        #     on_language_selected=select_language_without_llm,
+        #     send_opening_greeting=not params.skip_opening_greeting,
+        #     opening_greeting=(
+        #         OPENING_GREETING
+        #         if params.phone
+        #         else OPENING_GREETINGS.get(initial_language, OPENING_GREETINGS["english"])
+        #     ),
+        #     language_preselected=not (params.phone or params.skip_opening_greeting),
+        #     initial_language=initial_language,
+        # ),
         DynamicTTSProcessor(
             state=state,
             api_key=SONIOX_API_KEY_TTS,
