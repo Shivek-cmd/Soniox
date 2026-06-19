@@ -9,7 +9,6 @@ import os
 import urllib.request
 from urllib.parse import quote
 
-import audioop
 import websockets
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket
@@ -136,9 +135,13 @@ async def handle_media_stream(websocket: WebSocket):
 
     # phone=true tells the voice server: speak the language-selection greeting via TTS
     # and wait for the caller to choose English / Hindi / Punjabi before ordering.
+    # audio_out_format=pcm_mulaw&audio_out_sample_rate=8000: Soniox TTS outputs mulaw 8kHz
+    # natively so the bridge can forward bytes to Twilio with zero conversion — no ratecv,
+    # no lin2ulaw, no aliasing artifacts from the primitive Python resampler.
     voice_bot_url_with_params = (
         f"{SONIOX_VOICE_BOT_WS_URL}"
         f"?audio_in_format=mulaw&audio_in_sample_rate=8000&audio_in_num_channels=1"
+        f"&audio_out_format=pcm_mulaw&audio_out_sample_rate=8000"
         f"&language={VOICE_BOT_LANGUAGE}&voice={VOICE_BOT_VOICE}"
         f"&phone=true"
     )
@@ -178,9 +181,6 @@ async def handle_media_stream(websocket: WebSocket):
         async def send_to_twilio():
             """Receive events from the voice bot, send audio back to Twilio."""
             nonlocal stream_sid, call_sid
-            # Carry resampler state across chunks — passing None each call resets the
-            # interpolation filter at every chunk boundary, causing audible pops/clicks.
-            _ratecv_state = None
             try:
                 async for message in voicebot_ws:
                     if isinstance(message, str):
@@ -190,7 +190,6 @@ async def handle_media_stream(websocket: WebSocket):
                         if event_type in {"user_speech_start", "transcription"}:
                             # Barge-in: customer started speaking — cut bot audio
                             await handle_speech_started_event()
-                            _ratecv_state = None  # reset resampler after audio gap
 
                         elif event_type == "transfer":
                             reason = event.get("reason", "unknown")
@@ -200,15 +199,10 @@ async def handle_media_stream(websocket: WebSocket):
                         else:
                             print(f"Received event: {message}")
                     else:
-                        # Raw PCM audio from Soniox TTS (24kHz, 16-bit, mono)
-                        pcm_audio_bytes = message
-
-                        # Resample to 8kHz and convert to µ-law for Twilio.
-                        # State is carried between chunks for smooth interpolation.
-                        pcm_8k, _ratecv_state = audioop.ratecv(pcm_audio_bytes, 2, 1, 24000, 8000, _ratecv_state)
-                        ulaw_audio_bytes = audioop.lin2ulaw(pcm_8k, 2)
-
-                        audio_payload = base64.b64encode(ulaw_audio_bytes).decode("utf-8")
+                        # Soniox TTS outputs pcm_mulaw 8kHz natively — forward directly.
+                        # No ratecv or lin2ulaw needed; Soniox handles downsampling
+                        # server-side with proper anti-aliasing filters.
+                        audio_payload = base64.b64encode(message).decode("utf-8")
                         await websocket.send_json({
                             "event": "media",
                             "streamSid": stream_sid,
