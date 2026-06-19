@@ -114,7 +114,7 @@ class DynamicTTSProcessor(TTSProcessor):
         # Suppress it until the greeting has fully played. Real transcribed speech
         # (TranscriptionMessage) still cancels normally so barge-in works.
         if isinstance(message, UserSpeechStartMessage) and not self._greeting_done:
-            if time.monotonic() - self._session_start < 8.0:
+            if time.monotonic() - self._session_start < 3.5:
                 return
         await super().process(message)
 
@@ -303,11 +303,20 @@ async def handle(websocket: ServerConnection):
     }
     stt_hints = STT_LANGUAGE_HINTS.get(initial_language, ["pa", "hi", "en"])
 
-    processors: List[MessageProcessor] = [
-        VADProcessor(
+    # Phone calls (mulaw 8kHz): skip local VAD — Silero's 8kHz model is less
+    # accurate than 16kHz and phone line noise causes false positives. Soniox
+    # semantic endpoint detection handles turn-taking; TranscriptionMessage
+    # still cancels TTS for barge-in without needing a local VAD event.
+    # Browser (pcm_s16le 16kHz): keep VAD for fast barge-in response.
+    _use_vad = params.audio_in_format != "mulaw"
+
+    processors: List[MessageProcessor] = (
+        [VADProcessor(
             sample_rate=params.audio_in_sample_rate,
             audio_format=params.audio_in_format,
-        ),
+        )]
+        if _use_vad else []
+    ) + [
         STTProcessor(
             api_key=SONIOX_API_KEY,
             model=SONIOX_STT_MODEL,
